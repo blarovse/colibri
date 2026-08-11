@@ -5,8 +5,10 @@ FastAPI server providing:
 - JWT device registration and authentication
 - REST API for actions and audit logs
 - WebSocket for real-time events
+- Integration with Monday Core for action execution
 """
 
+import os
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
@@ -16,12 +18,15 @@ import jwt
 import uuid
 import json
 import asyncio
+import hashlib
 from enum import Enum
 
-# Configuration
-JWT_SECRET = "monday_gateway_secret_change_in_production"  # Load from env in production
+# Configuration from environment variables
+JWT_SECRET = os.getenv("MONDAY_JWT_SECRET", "monday_gateway_secret_change_in_production")
 JWT_ALGORITHM = "HS256"
 TOKEN_EXPIRY_DAYS = 365
+HTTP_PORT = int(os.getenv("MONDAY_HTTP_PORT", "8765"))
+WS_PORT = int(os.getenv("MONDAY_WS_PORT", "8766"))
 
 app = FastAPI(title="Monday Android Gateway", version="1.0.0")
 security = HTTPBearer(auto_error=False)
@@ -280,10 +285,25 @@ async def confirm_pairing(pairing_code: str):
             detail="Invalid or expired pairing code"
         )
     
+    # Generate permanent token for confirmed device
+    device_id = device_info.get('device_id') or hashlib.sha256(device_info.get('device_public_key', '').encode()).hexdigest()[:16]
+    token = jwt.encode(
+        {
+            'device_id': device_id,
+            'device_name': device_info.get('device_name', 'Unknown'),
+            'exp': datetime.utcnow() + timedelta(days=TOKEN_EXPIRY_DAYS),
+            'iat': datetime.utcnow(),
+            'paired': True
+        },
+        JWT_SECRET,
+        algorithm=JWT_ALGORITHM
+    )
+    
     return {
         "status": "paired",
-        "device_id": device_info['device_id'],
-        "device_name": device_info['device_name']
+        "device_id": device_id,
+        "device_name": device_info.get('device_name', 'Unknown'),
+        "token": token
     }
 
 
@@ -351,25 +371,57 @@ async def respond_to_permission(
     """
     Respond to a permission request from laptop.
     User approves or denies a gated action.
+    When approved, executes the action through Monday Core.
     """
-    # Broadcast response to laptop
-    await active_connections.broadcast({
-        "event_type": "permission_response",
-        "payload": {
-            "action_id": action_id,
-            "approved": response.approved,
-            "reason": response.reason,
-            "device_id": device['device_id']
-        }
-    })
+    # Get action from queue
+    if action_id not in action_queue:
+        raise HTTPException(status_code=404, detail="Action not found")
     
-    # Update audit log
-    for log in audit_logs:
-        if log.log_id == action_id:
-            log.status = "approved" if response.approved else "denied"
-            break
+    action_data = action_queue[action_id]
     
-    return {"status": "recorded"}
+    if not response.approved:
+        # Just record denial
+        await active_connections.broadcast({
+            "event_type": "permission_response",
+            "payload": {
+                "action_id": action_id,
+                "approved": False,
+                "reason": response.reason,
+                "device_id": device['device_id']
+            }
+        })
+        
+        # Update audit log
+        for log in audit_logs:
+            if log.log_id == action_id:
+                log.status = "denied"
+                break
+        
+        return {"status": "denied"}
+    
+    # Execute action through Monday Core
+    from monday.android_gateway.core_integration import execute_approved_action
+    
+    async def status_callback(message):
+        """Stream status updates to connected devices"""
+        await active_connections.broadcast(message)
+    
+    # Start execution in background
+    asyncio.create_task(_execute_action_with_callback(action_id, action_data, device['device_id'], status_callback))
+    
+    return {"status": "executing"}
+
+
+async def _execute_action_with_callback(action_id, action_data, device_id, callback):
+    """Execute action and stream status updates"""
+    from monday.android_gateway.core_integration import GatewayCoreBridge
+    
+    bridge = GatewayCoreBridge.get_instance()
+    result = await bridge.approve_and_execute(action_id, action_data.model_dump(), device_id, callback)
+    
+    # Update action queue with result
+    if action_id in action_queue:
+        action_queue[action_id].result = result.model_dump() if hasattr(result, 'model_dump') else {'success': result.success}
 
 
 @app.get("/audit", response_model=List[AuditLogEntry])

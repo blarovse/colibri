@@ -1,66 +1,36 @@
 ```
-# Python
+# Compiled Python files
+*.pyc
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
 
-# Gradle
-.gradle/
-build/
-
-# Android
-*.apk
-*.aar
-*.iml
-local.properties
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Logs
+# Logs and temporary files
 *.log
+*.tmp
+*.swp
 
-# Environment
+# Environment files
 .env
 .env.local
-.env.
+*.env.*
 
-# Coverage
-.coverage
+# Editors/IDE
+.vscode/
+.idea/
+
+# Coverage reports
 coverage/
 htmlcov/
+.coverage
 
-# Temporary files
-*.tmp
-*.temp
+# Distribution artifacts
+dist/
+build/
+target/
 
-# Compiled files
-*.class
-*.o
-*.obj
-*.out
-*.dll
-*.so
-*.a
+# Dependencies
+node_modules/
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
 ```
