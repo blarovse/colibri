@@ -1,0 +1,108 @@
+# Monday Configuration
+
+# Application Settings
+app:
+  name: "Monday"
+  version: "0.1.0"
+  description: "Multi-AI Personal Operating System"
+
+# Core Settings
+core:
+  max_concurrent_tasks: 5
+  default_timeout: 300
+  max_retries: 3
+  enable_caching: true
+
+# Model Routing
+routing:
+  # Default model for general tasks
+  default_model: "claude-sonnet"
+  
+  # Model selection by task type
+  models_by_task:
+    coding: "claude-sonnet"
+    research: "claude-sonnet"
+    creative: "qwen-vl"
+    game_development: "claude-sonnet"
+    
+  # Fallback chain
+  fallback_chain:
+    - "claude-sonnet"
+    - "deepseek-coder"
+    - "local-model"
+
+# Agent Settings
+agents:
+  coding:
+    enabled: true
+    priority: 10
+  research:
+    enabled: true
+    priority: 9
+  creative:
+    enabled: true
+    priority: 8
+  game:
+    enabled: true
+    priority: 7
+  automation:
+    enabled: true
+    priority: 6
+  browser:
+    enabled: true
+    priority: 5
+
+# Memory Settings
+memory:
+  short_term_max_items: 100
+  task_history_days: 30
+  project_retention_days: 90
+  enable_long_term: true
+
+# Automation Settings
+automation:
+  require_confirmation_high_risk: true
+  require_confirmation_medium_risk: true
+  allowed_applications:
+    - "Chrome"
+    - "Firefox"
+    - "VS Code"
+    - "Terminal"
+  blocked_actions:
+    - "delete_system_files"
+    - "modify_system_settings"
+
+# Security Settings
+security:
+  require_authentication: true
+  session_timeout_minutes: 60
+  max_failed_attempts: 5
+  encrypt_communications: true
+
+# Android Companion
+android:
+  enabled: false
+  port: 8080
+  require_pairing: true
+  pairing_code_length: 6
+
+# Observability
+observability:
+  enable_logging: true
+  log_level: "INFO"
+  enable_metrics: true
+  enable_dashboard: true
+  dashboard_port: 8081
+
+# API Keys (use environment variables in production)
+# These should be set in .env file, not here
+api_providers:
+  anthropic:
+    enabled: true
+    # api_key: ${ANTHROPIC_API_KEY}
+  deepseek:
+    enabled: true
+    # api_key: ${DEEPSEEK_API_KEY}
+  qwen:
+    enabled: true
+    # api_key: ${QWEN_API_KEY}
