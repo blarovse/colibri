@@ -1,80 +1,267 @@
-# ambienti python / cache
-c/mio_env/
+```
+# Dependencies
 __pycache__/
-**/__pycache__/
 *.pyc
-web/node_modules/
-web/dist/
-web/*.tsbuildinfo
-desktop/src-tauri/target/
-desktop/src-tauri/gen/
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+.env
+.env.local
+.env.*
+pyproject.toml
+poetry.lock
+Pipfile
+Pipfile.lock
+*.egg-info/
+.eggs/
+.mypy_cache/
+.pytest_cache/
+.tox/
+.coverage
+htmlcov/
 
-# binari compilati (si rigenerano con make / coli build)
-c/colibri
-c/colibri.exe
-c/glm
-c/glm.exe
-c/olmoe
-c/inkling
-c/kimi_k3
-c/kimi_k3.exe
-c/olmoe.exe
-c/iobench
-c/iobench.exe
-c/tok_test
-c/backend_cuda.o
-c/backend_cuda_test
-c/backend_loader.o
-c/coli_cuda.dll
-c/coli_cuda.lib
-c/coli_cuda.exp
-c/tests/test_*
-!c/tests/test_*.c
-!c/tests/test_*.cu
-!c/tests/test_*.mm
-!c/tests/test_*.py
-result
-c/tests/test_cap_precedence
-c/tests/test_cap_precedence.exe
+# Build artifacts
+build/
+dist/
+*.egg
+*.whl
+*.zip
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
 
-# oracoli tiny generati (make_glm_oracle.py) e dati benchmark scaricati
-c/glm_tiny/
-c/glm_tiny_i2/
-c/glm_tiny_i4/
-c/glm_tiny_mix/
-c/glm_bench_medium/
-c/bench/
-
-# pesi modello / artefatti di run
-*.safetensors
-stats*.txt
+# Logs
 *.log
 
-# script di ricerca stadio-0 (esperimenti locali, non parte del motore)
-/engine.py
-/run.py
-/validate_ref.py
-/s0_costmodel.py
-/s1_trace_hitrate.py
-/s2_research.py
-/quant_test.py
-/profile_run.py
-/sweep.py
-c/backend_metal.o
-c/backend_metal_test
-c/tests/test_tier
-c/mio_env/
-c/bench/
-c/tests/test_decode_batch
-c/tests/test_i4_acc512
-c/tests/test_idot
-c/tests/test_uring
-olmoe_merged/
-olmoe_i4/
-c/olmoe_merged/
-c/olmoe_i4/
-.idea
-c/tiny_inkling/
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Thumbs.db:encryptable
 
-# Claude Code working directory (agent worktrees, session scratch) — never a repo artifact
-.claude/
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.tmp
+
+# Environment variables
+.env
+.env.local
+.env.*
+
+# Coverage reports
+coverage/
+htmlcov/
+
+# Unit test / coverage reports
+.coverage
+*.cover
+.hypothesis/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+.pybuilder/
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# PEP 582
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# IDE
+.vscode/
+.idea/
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Python
+*.py[cod]
+*$py.class
+*$pyc.class
+*$pyo.class
+*~.nib
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Testing
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+
+# Translations
+*.mo
+*.pot
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+
+# Flask
+instance/
+.webassets-cache
+
+# Scrapy
+.scrapy
+
+# Sphinx
+docs/_build/
+
+# PyBuilder
+.pybuilder/
+target/
+
+# Jupyter
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# PEP 582
+__pypackages__/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder
+.spyderproject
+.spyproject
+
+# Rope
+.ropeproject
+
+# mkdocs
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre
+.pyre/
+
+# Coverage
+.coverage
+htmlcov/
+
+# Static assets
+staticfiles/
+media/
+
+# Browsers
+hs_err_pid*
+```
