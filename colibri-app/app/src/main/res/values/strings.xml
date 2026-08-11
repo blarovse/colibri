@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Colibri</string>
+    <string name="notification_channel_name">Monday Notifications</string>
+    <string name="notification_channel_description">Notifications from Monday AI assistant</string>
+    
+    <!-- Registration -->
+    <string name="registration_title">Connect to Monday</string>
+    <string name="registration_description">Register this device to control your Monday assistant</string>
+    <string name="device_name_label">Device Name</string>
+    <string name="server_url_label">Monday Server URL</string>
+    <string name="register_button">Register Device</string>
+    
+    <!-- Pairing -->
+    <string name="pairing_title">Pair Device</string>
+    <string name="pairing_instructions">Enter this code on your laptop</string>
+    <string name="pairing_description">Open Monday dashboard on your laptop and enter this 6-digit code to complete pairing</string>
+    <string name="waiting_confirmation">Waiting for confirmation...</string>
+    
+    <!-- Dashboard -->
+    <string name="dashboard_title">Monday</string>
+    <string name="connected_status">Connected to Monday</string>
+    <string name="connecting_status">Connecting...</string>
+    <string name="error_status">Connection error</string>
+    <string name="action_voice">Voice Command</string>
+    <string name="action_approvals">Approvals</string>
+    <string name="action_projects">Projects</string>
+    <string name="action_history">History</string>
+    <string name="logout">Logout</string>
+    
+    <!-- Commands -->
+    <string name="command_title">Send Command</string>
+    <string name="action_type_label">Action Type</string>
+    <string name="target_label">Target</string>
+    <string name="target_hint">e.g., Chrome, Monday Assistant</string>
+    <string name="command_label">Command / Voice Input</string>
+    <string name="command_hint">e.g., Create an expense tracker app</string>
+    <string name="quick_actions">Quick Actions</string>
+    <string name="send_command">Send Command</string>
+    
+    <!-- Approvals -->
+    <string name="approvals_title">Pending Approvals</string>
+    <string name="no_approvals">No pending approvals</string>
+    <string name="approve">Approve</string>
+    <string name="deny">Deny</string>
+    
+    <!-- Common -->
+    <string name="back">Back</string>
+    <string name="loading">Loading...</string>
+    <string name="error">Error</string>
+    <string name="success">Success</string>
+</resources>
