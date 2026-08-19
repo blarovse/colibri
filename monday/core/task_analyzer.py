@@ -20,6 +20,7 @@ class TaskType(Enum):
     BROWSER = "browser"
     SOCIAL_MEDIA = "social_media"
     FILE_OPERATION = "file_operation"
+    PREDICTION = "prediction"
     QUESTION_ANSWERING = "question_answering"
     GENERAL = "general"
 
@@ -44,6 +45,7 @@ class Intent(Enum):
     CONVERT = "convert"
     AUTOMATE = "automate"
     SCHEDULE = "schedule"
+    PREDICT = "predict"
     UNKNOWN = "unknown"
 
 
@@ -110,6 +112,8 @@ class TaskAnalyzer:
         Intent.CONVERT: ['convert', 'transform', 'translate', 'migrate'],
         Intent.AUTOMATE: ['automate', 'script', 'auto'],
         Intent.SCHEDULE: ['schedule', 'plan', 'set up', 'arrange'],
+        Intent.PREDICT: ['predict', 'forecast', 'will it', 'odds', 'outlook',
+                         'projection', 'what happens next', 'next move'],
     }
     
     # Keyword mappings for task type detection
@@ -149,6 +153,17 @@ class TaskAnalyzer:
             'file', 'folder', 'directory', 'document', 'save',
             'copy', 'move', 'rename', 'download', 'upload'
         ],
+        TaskType.PREDICTION: [
+            'predict', 'prediction', 'forecast', 'forecasting',
+            'next number', 'next value', 'next term', 'next move',
+            'sequence', 'pattern', 'trading', 'trader', 'trade',
+            'stock', 'stocks', 'share price', 'ticker', 'market',
+            'markets', 'crypto', 'bitcoin', 'btc', 'ethereum', 'eth',
+            'bullish', 'bearish', 'rally', 'correction', 'support',
+            'resistance', 'candle', 'chart', 'volatility', 'volatil',
+            'drawdown', 'position', 'portfolio', 'probability',
+            'odds', 'chance of', 'likelihood'
+        ],
     }
     
     def __init__(self):
@@ -174,7 +189,7 @@ class TaskAnalyzer:
         task_type = self._detect_task_type(input_lower)
         
         # Extract entities
-        entities = self._extract_entities(input_lower)
+        entities = self._extract_entities(input_lower, user_input)
         
         # Extract parameters
         parameters = self._extract_parameters(input_lower, intent, task_type)
@@ -236,7 +251,7 @@ class TaskAnalyzer:
         
         return best_match
     
-    def _extract_entities(self, input_lower: str) -> Dict[str, Any]:
+    def _extract_entities(self, input_lower: str, original_input: str = "") -> Dict[str, Any]:
         """Extract named entities from the input."""
         entities = {}
         
@@ -252,7 +267,27 @@ class TaskAnalyzer:
         paths = re.findall(path_pattern, input_lower)
         if paths:
             entities['paths'] = paths
-        
+
+        # Extract a numeric series (prediction tasks) — 3+ numbers
+        source = original_input or input_lower
+        numbers = [float(m) for m in re.findall(r'-?\d+(?:\.\d+)?', source)]
+        if len(numbers) >= 3:
+            entities['series'] = numbers
+
+        # Extract a likely ticker / crypto symbol
+        crypto = {'btc': 'BTC', 'bitcoin': 'BTC', 'eth': 'ETH', 'ethereum': 'ETH',
+                  'sol': 'SOL', 'doge': 'DOGE', 'xrp': 'XRP'}
+        for alias, symbol in crypto.items():
+            if alias in input_lower:
+                entities['symbol'] = symbol
+                break
+        else:
+            tickers = re.findall(r'\b[A-Z]{2,5}\b', source)
+            stops = {'THE', 'AND', 'FOR', 'WHAT', 'WILL', 'NEXT', 'PREDICT'}
+            tickers = [t for t in tickers if t not in stops]
+            if tickers:
+                entities['symbol'] = tickers[0]
+
         return entities
     
     def _extract_parameters(self, input_lower: str, intent: Intent, task_type: TaskType) -> Dict[str, Any]:
@@ -281,6 +316,11 @@ class TaskAnalyzer:
             TaskType.AUTOMATION: ['automation', 'scripting', 'tool_execution'],
             TaskType.BROWSER: ['browser_automation', 'navigation'],
             TaskType.SOCIAL_MEDIA: ['social_automation', 'content_preparation'],
+            TaskType.PREDICTION: [
+                'prediction', 'forecasting', 'market_analysis',
+                'probability_estimation', 'sequence_prediction',
+                'risk_assessment',
+            ],
         }
         
         capabilities = capability_map.get(task_type, [])

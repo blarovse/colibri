@@ -36,6 +36,13 @@ Monday is a multi-AI orchestration platform, personal AI assistant, computer aut
         │                  │                  │
         ▼                  ▼                  ▼
    CODING AGENT      RESEARCH AGENT     CREATIVE AGENT
+                                            
+                          ▼
+                  ┌─────────────────┐
+                  │ PREDICTION AGENT│  (Jarvis)
+                  │ "what happens   │
+                  │   next" only    │
+                  └─────────────────┘
         │                  │                  │
         ▼                  ▼                  ▼
    DeepSeek/other       Web tools        Qwen/image AI
@@ -76,7 +83,8 @@ Monday is a multi-AI orchestration platform, personal AI assistant, computer aut
 ```
 monday/
 ├── core/               # Core brain, orchestrator, task analyzer, planner
-├── agents/             # Specialist agents (coding, research, creative, game, automation)
+├── agents/             # Specialist agents (coding, prediction/Jarvis, ...)
+├── jarvis.py           # Jarvis prediction console (python -m monday.jarvis)
 ├── tools/              # Tool execution layer (browser, terminal, files, android, git, builds)
 ├── memory/             # Short-term, task, project, long-term preferences, knowledge memory
 ├── automation/         # Automation engine and executors (Windows, Browser, Android, File, Shell)
@@ -155,6 +163,39 @@ Monday will:
 2. Search the web
 3. Gather and compare sources
 4. Summarize findings with references
+
+### Predictions (Jarvis)
+
+```
+"Monday, predict the next number in 2 4 8 16 32"
+"Monday, will BTC go up or down? prices 44000 44500 44100 45200 45800"
+```
+
+Monday routes these to **Jarvis**, the prediction-only specialist:
+
+1. Direction probabilities (up / down / sideways) from six transparent
+   signals (momentum, EMA crossover, trend slope, RSI extremes,
+   mean reversion, MACD)
+2. Next-value forecasts with 80% / 95% intervals (trend + Holt
+   exponential smoothing + SMA ensemble, weighted by walk-forward error)
+3. Sequence solving (arithmetic, geometric, polynomial, linear
+   recurrence, cycles)
+4. Event odds (Laplace-smoothed frequencies, base rate + evidence
+   log-odds updates)
+5. Risk metrics (volatility, max drawdown, historical VaR 95%)
+
+Or talk to Jarvis directly — fully offline, no API keys:
+
+```
+python -m monday.jarvis                       # interactive console
+python -m monday.jarvis "next number in 2 4 8 16 32"
+python -m monday.jarvis --file prices.txt "direction"
+python -m monday.jarvis "..." --json          # machine-readable
+python -m monday.jarvis --demo
+```
+
+> Every market output carries an explicit disclaimer: these are
+> transparent statistical estimates, **not financial advice**.
 
 ### Creative Task
 

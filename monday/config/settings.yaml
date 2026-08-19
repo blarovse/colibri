@@ -24,6 +24,7 @@ routing:
     research: "claude-sonnet"
     creative: "qwen-vl"
     game_development: "claude-sonnet"
+    prediction: "local-statistical"   # Jarvis runs locally; no LLM required
     
   # Fallback chain
   fallback_chain:

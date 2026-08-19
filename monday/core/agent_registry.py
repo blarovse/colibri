@@ -22,6 +22,7 @@ class AgentType(Enum):
     TESTING = "testing"
     BUILD = "build"
     VALIDATION = "validation"
+    PREDICTION = "prediction"
 
 
 @dataclass
