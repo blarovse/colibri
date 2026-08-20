@@ -1346,7 +1346,7 @@ $('file').addEventListener('change', (ev) => {
   const f = ev.target.files[0]; if (!f) return;
   const rd = new FileReader();
   rd.onload = () => {
-    const nums = (String(rd.result).match(/-?\d+(\.\d+)?/g) || []).map(Number);
+    const nums = parseSeriesFile(rd.result);
     if (nums.length < 3) { logMsg('jarvis', 'that file has fewer than 3 numbers, sir'); return; }
     seriesEl.value = nums.join(' ');
     if (!symbolEl.value) symbolEl.value = f.name.replace(/\.[^.]+$/, '').toUpperCase().slice(0, 8);
@@ -1372,6 +1372,19 @@ $('actions').addEventListener('click', (ev) => {
 });
 $('send').addEventListener('click', () => { ask($('ask').value); $('ask').value = ''; });
 $('ask').addEventListener('keydown', (e) => { if (e.key === 'Enter') { ask($('ask').value); $('ask').value = ''; } });
+
+/* date-safe file parsing: strict numeric fields, last column wins (close) */
+function parseSeriesFile(text) {
+  const out = [];
+  String(text).split('\n').forEach((line) => {
+    const fields = line.trim().split(/[,;\t ]+/).filter(Boolean);
+    const nums = fields
+      .map((f) => (/^-?\d+(\.\d+)?$/.test(f) ? parseFloat(f) : NaN))
+      .filter((v) => Number.isFinite(v));
+    if (nums.length) out.push(nums.length > 1 ? nums[nums.length - 1] : nums[0]);
+  });
+  return out;
+}
 
 /* ---------------- live feed (Binance public market data, CORS-enabled) ---- */
 const LIVE = { timer: null, lastOpenTime: 0, symbol: 'BTCUSDT', interval: '1m' };

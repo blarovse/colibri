@@ -12,6 +12,50 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..',
 from monday.backtest import backtest, demo_series, format_report, main  # noqa: E402
 
 
+class TestSeriesLoader(unittest.TestCase):
+    """Date-safe loading: dates must never leak into the price series."""
+
+    def _load(self, content, suffix='.csv'):
+        import tempfile, os
+        with tempfile.NamedTemporaryFile('w', suffix=suffix, delete=False) as fh:
+            fh.write(content)
+            path = fh.name
+        try:
+            from monday.backtest import load_series_file
+            return load_series_file(path)
+        finally:
+            os.unlink(path)
+
+    def test_date_close_csv_with_header(self):
+        rows = ['date,close'] + [f'2025-09-{i:02d},{100 + i}' for i in range(1, 26)]
+        v = self._load('\n'.join(rows))
+        self.assertEqual(len(v), 25)
+        self.assertAlmostEqual(v[0], 101)
+        self.assertAlmostEqual(v[-1], 125)
+
+    def test_date_close_csv_no_header(self):
+        rows = [f'2025-09-{i:02d},{100 + i}' for i in range(1, 26)]
+        v = self._load('\n'.join(rows))
+        self.assertEqual(len(v), 25)
+        self.assertAlmostEqual(v[0], 101)
+
+    def test_single_column(self):
+        rows = [str(100 + i) for i in range(25)]
+        v = self._load('\n'.join(rows), suffix='.txt')
+        self.assertEqual(len(v), 25)
+        self.assertEqual(v[0], 100)
+
+    def test_real_example_file_loads_cleanly(self):
+        from monday.backtest import load_series_file
+        import os
+        path = os.path.join(os.path.dirname(__file__), '..', '..',
+                            'monday', 'examples', 'btc_usd_daily.csv')
+        if os.path.exists(path):
+            v = load_series_file(path)
+            self.assertEqual(len(v), 366)          # dates never leak in
+            self.assertTrue(all(50000 < x < 130000 for x in v))
+
+
 class TestBacktest(unittest.TestCase):
     def test_trending_series_shows_edge(self):
         rng = random.Random(3)
