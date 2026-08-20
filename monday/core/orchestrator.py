@@ -61,6 +61,11 @@ class MondayOrchestrator:
         self.task_analyzer = task_analyzer or TaskAnalyzer()
         self.task_planner = task_planner or TaskPlanner()
         self.agent_router = agent_router or AgentRouter()
+
+        # Make sure the agents that ship with Monday (including Jarvis,
+        # the prediction specialist) are available for routing.
+        from ..agents import register_default_agents
+        register_default_agents()
         
         self._execution_history: List[ExecutionResult] = []
         self._active_graphs: Dict[str, TaskGraph] = {}
@@ -145,9 +150,10 @@ class MondayOrchestrator:
             for task_id in level:
                 task_node = graph.nodes[task_id]
                 
-                # Skip root node
+                # Skip root node (initialization always counts as progress)
                 if 'root' in task_id:
                     graph.mark_completed(task_id)
+                    level_results.append(True)
                     continue
                 
                 # Check for confirmation requirement
@@ -168,7 +174,11 @@ class MondayOrchestrator:
                 response = self.agent_router.execute_task(task_node)
                 
                 if response.success:
-                    graph.mark_completed(task_id, response.outputs)
+                    graph.mark_completed(
+                        task_id,
+                        response.output if isinstance(response.output, dict)
+                        else {'output': response.output},
+                    )
                     outputs[task_id] = response.output
                     
                     if response.artifacts:

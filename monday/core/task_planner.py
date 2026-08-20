@@ -268,6 +268,13 @@ class TaskPlanner:
                 {'name': 'Execution', 'agent_type': 'automation', 'priority': 8},
                 {'name': 'Verification', 'agent_type': 'validation', 'priority': 7},
             ],
+            TaskType.PREDICTION: [
+                {'name': 'Data Intake & Validation', 'agent_type': 'prediction', 'priority': 10},
+                {'name': 'Statistical Analysis', 'agent_type': 'prediction', 'priority': 9},
+                {'name': 'Prediction Generation', 'agent_type': 'prediction', 'priority': 8},
+                {'name': 'Risk Assessment', 'agent_type': 'prediction', 'priority': 7},
+                {'name': 'Prediction Report', 'agent_type': 'prediction', 'priority': 6},
+            ],
         }
     
     def plan(self, spec: TaskSpecification) -> TaskGraph:
@@ -351,6 +358,7 @@ class TaskPlanner:
             TaskType.AUTOMATION: 'automation',
             TaskType.BROWSER: 'browser',
             TaskType.SOCIAL_MEDIA: 'social',
+            TaskType.PREDICTION: 'prediction',
         }
         return agent_map.get(task_type, 'general')
     

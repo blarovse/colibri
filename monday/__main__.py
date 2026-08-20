@@ -21,6 +21,8 @@ Examples:
   monday "Research the best Kotlin tutorials"
   monday "Make a poster for my school event"
   monday "Open Chrome and search for Python tutorials"
+  monday "Predict the next number in 2 4 8 16 32"
+  python -m monday.jarvis        # Jarvis prediction console
         """
     )
     
