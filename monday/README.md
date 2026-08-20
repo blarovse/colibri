@@ -222,8 +222,33 @@ python -m monday.trader --demo
 # in the Jarvis console / app: "autotrade"  (or the ⚡ Auto-trade chip)
 ```
 
-Real-money wiring is deliberately absent. If you ever add a live broker
-yourself: testnet first, keep the risk limits, and re-read the backtest.
+### Live prices (and testnet execution)
+
+```bash
+python -m monday.live                        # live testnet prices → paper fills
+python -m monday.live --symbol ETHUSDT --interval 5m
+python -m monday.live --execute              # + REAL orders on the spot TESTNET
+python -m monday.live --bars 30              # auto-stop, disarm, full report
+```
+
+`--execute` mirrors every paper fill as a MARKET order on the **Binance
+spot TESTNET** — real API mechanics and order lifecycle, fake funds. To
+enable it:
+
+1. Create free testnet keys: <https://testnet.binance.vision>
+2. `cp monday/config/secrets.env.example monday/config/secrets.env` and fill
+   in `BINANCE_TESTNET_KEY` / `BINANCE_TESTNET_SECRET`
+   (that file is gitignored; keys are never logged or accepted in code
+   review chat)
+
+Mainnet is refused by construction — `monday/brokers.py` contains no
+mainnet URL and rejects any other host (`SafetyError`). Real-money wiring
+is deliberately absent. If you ever add it yourself: testnet first, keep
+the risk limits, and re-read the backtest.
+
+The **app** also has a live mode (● Go live): it streams real Binance
+candles into the chart from your browser and can auto-trade each new bar
+on the paper account — no keys needed for market data.
 
 **As a downloadable app** — Jarvis also ships as an offline single-file web
 app (plus installable PWA) in [`monday/app/`](app/README.md):

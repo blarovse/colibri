@@ -12,6 +12,7 @@ __pycache__/
 .env
 .env.local
 *.env.*
+secrets.env
 
 # Editors/IDE
 .vscode/

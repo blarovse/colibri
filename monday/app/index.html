@@ -162,6 +162,19 @@
       <label class="ghost" style="display:inline-block">Load file<input type="file" id="file" class="hidden" accept=".csv,.txt,.tsv,text/*"></label>
       <span class="meta" id="parsed" style="align-self:center; margin:0 0 0 auto"></span>
     </div>
+    <div class="row" style="margin-top:10px; padding-top:10px; border-top:1px dashed var(--line)">
+      <select id="liveSymbol" style="max-width:130px">
+        <option>BTCUSDT</option><option>ETHUSDT</option><option>SOLUSDT</option><option>BNBUSDT</option><option>DOGEUSDT</option>
+      </select>
+      <select id="liveInterval" style="max-width:90px">
+        <option value="1m">1m</option><option value="5m">5m</option><option value="15m">15m</option><option value="1h">1h</option>
+      </select>
+      <button class="ghost" id="liveBtn" style="border-color:#2b6fd6; color:var(--ink)">● Go live</button>
+      <label class="meta" style="display:flex; align-items:center; gap:6px; cursor:pointer">
+        <input type="checkbox" id="liveAuto"> ⚡ auto-trade each new bar (paper)
+      </label>
+      <span class="meta" id="liveStatus" style="margin:0 0 0 auto"></span>
+    </div>
     <canvas id="chart" height="190"></canvas>
   </section>
 
@@ -633,6 +646,55 @@ $('actions').addEventListener('click', (ev) => {
 });
 $('send').addEventListener('click', () => { ask($('ask').value); $('ask').value = ''; });
 $('ask').addEventListener('keydown', (e) => { if (e.key === 'Enter') { ask($('ask').value); $('ask').value = ''; } });
+
+/* ---------------- live feed (Binance public market data, CORS-enabled) ---- */
+const LIVE = { timer: null, lastOpenTime: 0, symbol: 'BTCUSDT', interval: '1m' };
+const LIVE_POLL = { '1m': 20, '5m': 60, '15m': 120, '1h': 300 };
+const liveStatus = (t, ok) => { $('liveStatus').textContent = t; $('liveStatus').style.color = ok ? 'var(--up)' : 'var(--flat)'; };
+
+async function fetchKlines(symbol, interval) {
+  const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=120`;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error('HTTP ' + resp.status);
+  return resp.json();           // newest last; final row is still forming
+}
+function closedCandles(rows) { return rows.slice(0, -1); }   // drop forming bar
+
+async function liveTick(first) {
+  try {
+    const rows = closedCandles(await fetchKlines(LIVE.symbol, LIVE.interval));
+    if (!rows.length) throw new Error('no candles');
+    const newest = rows[rows.length - 1];
+    if (newest[0] === LIVE.lastOpenTime && !first) {   // nothing new yet
+      liveStatus(`live · ${LIVE.symbol} ${LIVE.interval} · waiting for close ${(+newest[4]).toLocaleString()}`, true);
+      return;
+    }
+    LIVE.lastOpenTime = newest[0];
+    seriesEl.value = rows.map((r) => +r[4]).join(' ');
+    symbolEl.value = LIVE.symbol.replace('USDT', '');
+    refresh(); persist();
+    liveStatus(`live · ${LIVE.symbol} ${LIVE.interval} · ${rows.length} bars · close ${(+newest[4]).toLocaleString()}`, true);
+    if ($('liveAuto').checked) ask('auto trade');
+  } catch (e) {
+    liveStatus('feed unreachable (offline or blocked) — retrying…', false);
+  }
+}
+
+$('liveBtn').addEventListener('click', () => {
+  if (LIVE.timer) {   // stop
+    clearInterval(LIVE.timer); LIVE.timer = null;
+    $('liveBtn').textContent = '● Go live';
+    liveStatus('feed stopped · data kept', false);
+    return;
+  }
+  LIVE.symbol = $('liveSymbol').value;
+  LIVE.interval = $('liveInterval').value;
+  $('liveBtn').textContent = '■ Stop feed';
+  liveTick(true);
+  LIVE.timer = setInterval(() => liveTick(false), LIVE_POLL[LIVE.interval] * 1000);
+});
+$('liveSymbol').addEventListener('change', () => { if (LIVE.timer) { liveTick(true); } });
+$('liveInterval').addEventListener('change', () => { if (LIVE.timer) { liveTick(true); } });
 
 /* PWA service worker (only meaningful when hosted over http(s)) */
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {

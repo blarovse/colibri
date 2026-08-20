@@ -52,6 +52,10 @@ python3 monday/app/build_standalone.py   # -> monday/app/jarvis-app.html
      equity curve vs buy & hold, per-trade P&L
 3. **Read** — probability bars, signal breakdown, forecast with 80/95%
    intervals on the chart, bull/base/bear targets, risk gauge.
+4. **Go live (optional)** — pick a symbol + candle size and tap **● Go
+   live**: real Binance prices stream into the chart straight from your
+   browser (public API, no keys). Tick **⚡ auto-trade each new bar** and
+   Jarvis re-runs the paper trader on every candle close.
 
 Every market answer carries the disclaimer: transparent statistical
 estimates, **not financial advice**.

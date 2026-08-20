@@ -150,10 +150,11 @@ class AutoTrader:
     """
 
     def __init__(self, config: Optional[TraderConfig] = None,
-                 agent: Optional[PredictionAgent] = None):
+                 agent: Optional[PredictionAgent] = None,
+                 broker: Optional[PaperBroker] = None):
         self.config = config or TraderConfig()
         self.agent = agent or PredictionAgent()
-        self.broker = PaperBroker(self.config)
+        self.broker = broker or PaperBroker(self.config)
         self.armed = False
         self.killed = False
         self.kill_reason = ''
