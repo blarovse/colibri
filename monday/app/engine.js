@@ -466,6 +466,79 @@
     };
   }
 
+  // ---------------------------------------------------------------- backtest
+  function backtest(values, warmup = 12, confidenceThreshold = 0.6) {
+    values = values.map(Number);
+    const n = values.length;
+    if (n < warmup + 5) return { error: `Need at least ${warmup + 5} points (got ${n}).` };
+    let hits = 0, total = 0, confHits = 0, confTotal = 0;
+    let brierJ = 0, brierCoin = 0, brierMom = 0;
+    const verdictCounts = { UP: 0, DOWN: 0, SIDEWAYS: 0 };
+    let fcErr = 0, naiveErr = 0, fcPts = 0;
+    const buckets = { '50-60%': [0, 0], '60-70%': [0, 0], '70-80%': [0, 0], '80%+': [0, 0] };
+
+    for (let i = warmup; i < n - 1; i++) {
+      const window = values.slice(0, i + 1);
+      const ret = values[i] ? (values[i + 1] - values[i]) / values[i] : 0;
+      const outcomeUp = ret > 0 ? 1 : 0;
+      const pred = predictDirection(window);
+      if (pred.error) continue;
+
+      total++;
+      verdictCounts[pred.verdict]++;
+      const correct = (pred.verdict === 'UP' && ret > 0) || (pred.verdict === 'DOWN' && ret < 0);
+      if (correct) hits++;
+
+      const conf = pred.confidence;
+      if (conf >= confidenceThreshold) { confTotal++; if (correct) confHits++; }
+
+      const denom = Math.max(pred.probabilities.up + pred.probabilities.down, 1e-9);
+      const pUp = pred.probabilities.up / denom;
+      brierJ += (pUp - outcomeUp) ** 2;
+      brierCoin += (0.5 - outcomeUp) ** 2;
+      const lastRet = values[i - 1] ? (values[i] - values[i - 1]) / values[i - 1] : 0;
+      brierMom += ((lastRet > 0 ? 1 : 0) - outcomeUp) ** 2;
+
+      const pct = conf * 100;
+      const key = pct < 60 ? '50-60%' : pct < 70 ? '60-70%' : pct < 80 ? '70-80%' : '80%+';
+      buckets[key][1]++;
+      if (correct) buckets[key][0]++;
+
+      if (i % 5 === 0) {
+        const fc = forecastSeries(window);
+        if (!fc.error) {
+          fcPts++;
+          fcErr += Math.abs(fc.nextValue - values[i + 1]);
+          naiveErr += Math.abs(values[i] - values[i + 1]);
+        }
+      }
+    }
+    if (total === 0) return { error: 'No scored predictions (series too short).' };
+
+    const grade = (hr, br) =>
+      (br < 0.2 && hr >= 0.6) ? 'edge: model beat both baselines on this data'
+        : hr >= 0.55 ? 'weak edge: slightly better than a coin flip'
+        : Math.abs(hr - 0.5) < 0.05 ? 'no measurable edge on this data'
+        : 'model underperformed on this data — do not trust it here';
+
+    const r4 = (x) => Math.round(x * 10000) / 10000;
+    return {
+      kind: 'backtest', points: n, predictions: total, warmup,
+      hitRate: Math.round((hits / total) * 1000) / 1000,
+      confidentHitRate: confTotal ? Math.round((confHits / confTotal) * 1000) / 1000 : null,
+      confidentShare: Math.round((confTotal / total) * 1000) / 1000,
+      brier: r4(brierJ / total), brierCoinFlip: r4(brierCoin / total),
+      brierMomentum: r4(brierMom / total),
+      verdictMix: verdictCounts,
+      forecastMae: fcPts ? Math.round((fcErr / fcPts) * 10000) / 10000 : null,
+      naiveMae: fcPts ? Math.round((naiveErr / fcPts) * 10000) / 10000 : null,
+      calibration: Object.entries(buckets).filter(([, v]) => v[1])
+        .map(([bucket, v]) => ({ bucket, hitRate: Math.round((v[0] / v[1]) * 1000) / 1000, n: v[1] })),
+      verdict: grade(hits / total, brierJ / total),
+      note: 'Walk-forward, zero look-ahead. Past accuracy never guarantees future results.',
+    };
+  }
+
   // ---------------------------------------------------------------- parsing
   function extractSeries(text) {
     const m = String(text || '').match(/-?\d+(\.\d+)?/g);
@@ -484,7 +557,7 @@
 
   return {
     DISCLAIMER, indicators, predictDirection, scenarios, forecastSeries,
-    predictSequence, eventProbability, assessRisk, analyzeMarket,
+    predictSequence, eventProbability, assessRisk, analyzeMarket, backtest,
     extractSeries, extractSymbol,
   };
 });

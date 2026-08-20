@@ -22,6 +22,9 @@ a = PredictionAgent()
 print(json.dumps(${expr}))
 `], { cwd: root }));
 
+const pyScript = (script) =>
+  JSON.parse(execFileSync('python3', ['-c', script.replace('{ROOT}', root)], { cwd: root }));
+
 let failures = 0;
 const close = (a, b, tol, label) => {
   const d = Math.abs(a - b);
@@ -99,6 +102,34 @@ sj.scenarios.forEach((s, i) => {
   close(s.target, sp.scenarios[i].target, 0.05, 'scen.target');
 });
 
-console.log(failures === 0 ? `✓ parity OK (${SERIES.up.length}-pt series, ${SEQS.length} sequences, events, risk, scenarios)`
+// ---- backtest parity (JS and Python must score identically on the same series)
+const pySeries = pyScript(`
+import sys, json, random
+sys.path.insert(0, r"{ROOT}")
+rng = random.Random(42)
+v, series = 100.0, []
+for _ in range(120):
+    v *= 1.0 + rng.gauss(0.002, 0.008)
+    series.append(round(v, 4))
+print(json.dumps(series))
+`);
+const pb = pyScript(`
+import sys, json
+sys.path.insert(0, r"{ROOT}")
+series = json.loads('''${JSON.stringify(pySeries)}''')
+from monday.backtest import backtest
+print(json.dumps(backtest(series)))
+`);
+const jsBack = E.backtest(pySeries, 12, 0.6);
+eq(jsBack.predictions, pb.predictions, 'bt.predictions');
+close(jsBack.hitRate, pb.hit_rate, 0.002, 'bt.hitRate');
+close(jsBack.brier, pb.brier, 0.005, 'bt.brier');
+close(jsBack.brierMomentum, pb.brier_momentum, 0.005, 'bt.brierMom');
+eq(jsBack.verdictMix.UP, pb.verdict_mix.UP, 'bt.mix.UP');
+eq(jsBack.verdictMix.DOWN, pb.verdict_mix.DOWN, 'bt.mix.DOWN');
+eq(jsBack.forecastMae != null, pb.forecast_mae != null, 'bt.fc presence');
+close(jsBack.forecastMae, pb.forecast_mae, 0.01, 'bt.forecastMae');
+
+console.log(failures === 0 ? `✓ parity OK (${SERIES.up.length}-pt series, ${SEQS.length} sequences, events, risk, scenarios, backtest)`
   : `✗ ${failures} parity failures`);
 process.exit(failures === 0 ? 0 : 1);

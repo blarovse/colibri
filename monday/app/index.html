@@ -173,6 +173,7 @@
       <span class="chip" data-q="forecast">Next value</span>
       <span class="chip" data-q="scenarios">Scenarios</span>
       <span class="chip" data-q="risk">Risk</span>
+      <span class="chip" data-q="backtest">Backtest</span>
       <span class="chip" data-q="brief">Full brief</span>
       <span class="chip" data-q="sequence">Sequence puzzle</span>
       <span class="chip" data-q="odds">Event odds</span>
@@ -398,6 +399,26 @@ function render(result, series) {
       drawChart(series);
       break;
     }
+    case 'backtest': {
+      const good = result.hitRate >= 0.55;
+      const mid = Math.abs(result.hitRate - 0.5) < 0.05;
+      const col = good ? 'var(--up)' : mid ? 'var(--flat)' : 'var(--down)';
+      box.innerHTML = `
+        <div class="verdict"><span class="big" style="background:#0c142e;border:1px solid var(--line);color:${col}">${(result.hitRate * 100).toFixed(1)}%</span>
+          <div class="stat">directional hit rate over <b>${result.predictions}</b> walk-forward calls
+          · ${(result.confidentShare * 100).toFixed(0)}% were high-confidence${result.confidentHitRate != null ? ` (those hit <b>${(result.confidentHitRate * 100).toFixed(0)}%</b>)` : ''}</div></div>
+        <div class="bars">${bar('b-up', 'hit rate', result.hitRate)}${bar('b-flat', 'coin flip', 0.5)}</div>
+        <div class="grid3">
+          <div class="tile"><div class="k">Brier</div><div class="v">${result.brier.toFixed(3)}</div><div class="s">coin ${result.brierCoinFlip.toFixed(3)} · mom ${result.brierMomentum.toFixed(3)}</div></div>
+          <div class="tile"><div class="k">verdict mix</div><div class="v" style="font-size:15px">${result.verdictMix.UP}▲ ${result.verdictMix.DOWN}▼</div><div class="s">${result.verdictMix.SIDEWAYS} sideways</div></div>
+          ${result.forecastMae != null ? `<div class="tile"><div class="k">forecast MAE</div><div class="v">${fmt(result.forecastMae)}</div><div class="s">naive ${fmt(result.naiveMae)}</div></div>` : ''}
+        </div>
+        ${result.calibration.length ? `<div class="meta">calibration — ${result.calibration.map((c) => `${c.bucket}: <b>${(c.hitRate * 100).toFixed(0)}%</b> (n=${c.n})`).join(' · ')}</div>` : ''}
+        <div class="warn" style="color:${col}">◆ ${result.verdict}</div>
+        <div class="disclaimer">◆ ${result.note}</div>`;
+      drawChart(series);
+      break;
+    }
     default: box.innerHTML = `<pre style="font-size:12px;white-space:pre-wrap">${JSON.stringify(result, null, 1)}</pre>`;
   }
   $('answer-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -433,6 +454,10 @@ function route(question) {
   // sequence
   const wantsSeq = /next (number|term|value|digit)|sequence|pattern/.test(low);
   if (wantsSeq && st.series.length >= 3) return E.predictSequence(st.series);
+
+  // backtest: measure the model on this series
+  if (/backtest|hit rate|accuracy|how good|how often/.test(low) && st.series.length >= 17)
+    return E.backtest(st.series);
 
   // which market analysis?
   const wantsDir = /direction|up or down|will it|go up|go down|rise|fall|drop|rally|trend|market|trade|tomorrow|next bar|next candle|what will /.test(low) || low === 'direction';
@@ -477,6 +502,7 @@ function summarize(r) {
     case 'scenarios': return r.scenarios.map((s) => `${s.name} ${fmt(s.target)} (${(s.probability * 100).toFixed(0)}%)`).join(' · ');
     case 'risk': return `risk ${r.riskLabel.toUpperCase()} ${r.riskScore}/10 · VaR95 ${r.historicalVar95Pct}% · DD ${r.maxDrawdownPct}%`;
     case 'event_probability': return `probability ${(r.probability * 100).toFixed(1)}%`;
+    case 'backtest': return `backtest: ${(r.hitRate * 100).toFixed(1)}% hit rate over ${r.predictions} calls — ${r.verdict}`;
     case 'market_brief': return `brief: ${r.direction.verdict} · risk ${r.risk.riskLabel}`;
     default: return null;
   }

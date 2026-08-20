@@ -45,6 +45,8 @@ python3 monday/app/build_standalone.py   # -> monday/app/jarvis-app.html
    - `will it go up or down`
    - `next number in 2 4 8 16 32`
    - `odds 7 of 10` · `odds base 30% strong evidence for`
+   - `backtest` — scores the model on your loaded series (walk-forward,
+     no look-ahead): hit rate, Brier vs baselines, calibration
 3. **Read** — probability bars, signal breakdown, forecast with 80/95%
    intervals on the chart, bull/base/bear targets, risk gauge.
 

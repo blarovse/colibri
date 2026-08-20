@@ -185,6 +185,18 @@ Monday routes these to **Jarvis**, the prediction-only specialist:
    log-odds updates)
 5. Risk metrics (volatility, max drawdown, historical VaR 95%)
 
+**Measure before you trust it** — the walk-forward backtest scores the
+direction model on your own data with zero look-ahead:
+
+```
+python -m monday.backtest prices.csv          # your series
+python -m monday.backtest --demo              # seeded demo
+```
+
+It reports hit rate, Brier score vs coin-flip/momentum baselines, forecast
+MAE vs naive, and confidence calibration — and says plainly when there is
+*no measurable edge* (e.g. on pure random walks).
+
 Or talk to Jarvis directly — fully offline, no API keys:
 
 ```
