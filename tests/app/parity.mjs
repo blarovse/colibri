@@ -130,6 +130,36 @@ eq(jsBack.verdictMix.DOWN, pb.verdict_mix.DOWN, 'bt.mix.DOWN');
 eq(jsBack.forecastMae != null, pb.forecast_mae != null, 'bt.fc presence');
 close(jsBack.forecastMae, pb.forecast_mae, 0.01, 'bt.forecastMae');
 
-console.log(failures === 0 ? `✓ parity OK (${SERIES.up.length}-pt series, ${SEQS.length} sequences, events, risk, scenarios, backtest)`
+// ---- autotrade parity: same seeded series, identical paper accounting
+const pt = pyScript(`
+import sys, json, random
+sys.path.insert(0, r"{ROOT}")
+rng = random.Random(42)
+v, series = 100.0, []
+for _ in range(150):
+    v *= 1.0 + rng.gauss(0.003, 0.005)
+    series.append(round(v, 4))
+from monday.trader import AutoTrader, TraderConfig
+r = AutoTrader.simulate(series, TraderConfig(starting_equity=5000))
+print(json.dumps(r))
+`);
+const jt = E.autoTrade(pt.series, { startingEquity: 5000 });
+eq(jt.tradeCount, pt.trade_count, 'at.trades');
+eq(jt.wins, pt.wins, 'at.wins');
+eq(jt.losses, pt.losses, 'at.losses');
+close(jt.finalEquity, pt.final_equity, 0.02, 'at.finalEquity');
+close(jt.totalReturnPct, pt.total_return_pct, 0.01, 'at.return');
+close(jt.buyHoldReturnPct, pt.buy_hold_return_pct, 0.01, 'at.bh');
+close(jt.maxDrawdownPct, pt.max_drawdown_pct, 0.01, 'at.maxDD');
+eq(jt.killed, pt.killed, 'at.killed');
+eq(jt.equityCurve.length, pt.equity_curve.length, 'at.curve.len');
+close(jt.equityCurve[jt.equityCurve.length - 1], pt.equity_curve[pt.equity_curve.length - 1], 0.02, 'at.curve.last');
+jt.trades.forEach((t, i) => {
+  close(t.pnl, pt.trades[i].pnl, 0.02, `at.trade${i}.pnl`);
+  eq(t.reason, pt.trades[i].reason, `at.trade${i}.reason`);
+  close(t.entryPrice, pt.trades[i].entry_price, 0.01, `at.trade${i}.entry`);
+});
+
+console.log(failures === 0 ? `✓ parity OK (${SERIES.up.length}-pt series, ${SEQS.length} sequences, events, risk, scenarios, backtest, autotrade)`
   : `✗ ${failures} parity failures`);
 process.exit(failures === 0 ? 0 : 1);

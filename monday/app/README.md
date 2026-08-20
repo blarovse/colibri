@@ -47,6 +47,9 @@ python3 monday/app/build_standalone.py   # -> monday/app/jarvis-app.html
    - `odds 7 of 10` · `odds base 30% strong evidence for`
    - `backtest` — scores the model on your loaded series (walk-forward,
      no look-ahead): hit rate, Brier vs baselines, calibration
+   - `auto trade` / ⚡ **Auto-trade** — Jarvis trades the loaded series
+     on its own (paper account): entries, stops, targets, kill switch,
+     equity curve vs buy & hold, per-trade P&L
 3. **Read** — probability bars, signal breakdown, forecast with 80/95%
    intervals on the chart, bull/base/bear targets, risk gauge.
 

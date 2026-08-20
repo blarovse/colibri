@@ -466,7 +466,167 @@
     };
   }
 
-  // ---------------------------------------------------------------- backtest
+  // ---------------------------------------------------------------- autotrade
+  const TRADER_DEFAULTS = {
+    startingEquity: 10000, positionFraction: 0.10, confidenceMin: 0.60,
+    probMin: 0.60, stopLossPct: 0.03, takeProfitPct: 0.06, commissionBps: 10,
+    slippageBps: 5, maxDrawdownKill: 0.20, maxConsecutiveLosses: 5,
+    warmup: 12, allowShort: false,
+  };
+  const PAPER_NOTE = 'Paper execution only — simulated fills, no exchange contacted, no real ' +
+    'money. Past (simulated) performance never guarantees future results.';
+
+  function autoTrade(series, overrides) {
+    const cfg = Object.assign({}, TRADER_DEFAULTS, overrides || {});
+    series = series.map(Number);
+    const costs = (price, qty) => price * qty * (cfg.commissionBps / 10000);
+    let cash = cfg.startingEquity, position = null, realizedPnl = 0, fills = 0;
+    let armed = true, killed = false, killReason = '';
+    let consecutiveLosses = 0, peak = cfg.startingEquity;
+    const trades = [], equityCurve = [], prices = [], actions = [];
+
+    const r4 = (x) => Math.round(x * 10000) / 10000;
+
+    function buy(index, price) {
+      if (position) return null;
+      const slipped = price * (1 + cfg.slippageBps / 10000);
+      if (slipped <= 0 || cash <= 0) return null;
+      const budget = Math.min(cash * cfg.positionFraction, cash);
+      let qty = budget / slipped;
+      while (qty > 0) {
+        const cost = qty * slipped + costs(slipped, qty);
+        if (cost <= budget * 1.0000001) break;
+        qty *= 0.999;
+      }
+      const cost = qty * slipped + costs(slipped, qty);
+      if (qty <= 0 || cost > cash) return null;
+      cash -= cost; fills++;
+      position = {
+        side: 'long', entryIndex: index, entryPrice: slipped, quantity: qty,
+        stopPrice: slipped * (1 - cfg.stopLossPct),
+        targetPrice: slipped * (1 + cfg.takeProfitPct),
+      };
+      return position;
+    }
+    function close(index, price, reason) {
+      if (!position) return null;
+      const slipped = price * (1 - cfg.slippageBps / 10000);
+      const proceeds = slipped * position.quantity - costs(slipped, position.quantity);
+      cash += proceeds; fills++;
+      const pnl = proceeds - (position.entryPrice * position.quantity +
+        costs(position.entryPrice, position.quantity));
+      realizedPnl += pnl;
+      const trade = {
+        side: position.side, entryIndex: position.entryIndex,
+        entryPrice: position.entryPrice, exitIndex: index, exitPrice: slipped,
+        quantity: position.quantity, pnl: r4(pnl), reason,
+      };
+      position = null;
+      return trade;
+    }
+    function kill(reason) {
+      killed = true; killReason = reason;
+      if (position && prices.length) {
+        const t = close(prices.length - 1, prices[prices.length - 1], 'manual');
+        if (t) record(t);
+      }
+      armed = false;
+      actions.push('KILL SWITCH: ' + reason);
+    }
+    function record(trade) {
+      trades.push(trade);
+      if (trade.pnl < 0) {
+        consecutiveLosses++;
+        if (consecutiveLosses >= cfg.maxConsecutiveLosses) kill(consecutiveLosses + ' consecutive losses');
+      } else consecutiveLosses = 0;
+    }
+
+    // ---- the autonomous loop, one bar at a time ----
+    for (let i = 0; i < series.length; i++) {
+      const price = series[i];
+      prices.push(price);
+      const eq = position ? cash + position.quantity * price : cash;
+      equityCurve.push(r4(eq));
+      if (eq > peak) peak = eq;
+
+      // 1) drawdown kill switch runs whenever a position exists
+      if (position && 1 - eq / peak >= cfg.maxDrawdownKill) {
+        kill('max drawdown breached');
+        continue;
+      }
+      if (killed || !armed || i < cfg.warmup) continue;
+
+      // 2) exits: stop / target
+      if (position) {
+        let reason = null;
+        if (price <= position.stopPrice) reason = 'stop_loss';
+        else if (price >= position.targetPrice) reason = 'take_profit';
+        if (reason) {
+          const t = close(i, price, reason);
+          if (t) record(t);
+        }
+      }
+
+      // 3) exit on confident opposite signal
+      if (position && prices.length >= 6) {
+        const pred = predictDirection(prices);
+        if (pred.verdict === 'DOWN' && pred.confidence >= cfg.confidenceMin) {
+          const t = close(i, price, 'signal_flip');
+          if (t) record(t);
+        }
+      }
+
+      // 4) entry on a confident UP signal
+      if (!position && !killed && prices.length >= 6) {
+        const pred = predictDirection(prices);
+        if (pred.verdict === 'UP' && pred.confidence >= cfg.confidenceMin &&
+            pred.probabilities.up >= cfg.probMin) buy(i, price);
+      }
+    }
+    // disarm + flatten
+    if (position && prices.length) {
+      const t = close(prices.length - 1, prices[prices.length - 1], 'manual');
+      if (t) record(t);
+    }
+    armed = false;
+
+    // ---- report ----
+    const curve = equityCurve.length ? equityCurve : [cfg.startingEquity];
+    const final = curve[curve.length - 1];
+    const totalReturn = final / cfg.startingEquity - 1;
+    const startI = Math.min(cfg.warmup, prices.length - 1);
+    const bh = prices.length >= 2 && prices[0]
+      ? prices[prices.length - 1] / prices[startI] - 1 : 0;
+    let pk = curve[0], maxDd = 0;
+    curve.forEach((e2) => { if (e2 > pk) pk = e2; if (pk > 0) maxDd = Math.min(maxDd, e2 / pk - 1); });
+    const wins = trades.filter((t) => t.pnl > 0), losses = trades.filter((t) => t.pnl <= 0);
+    const grossWin = wins.reduce((a, t) => a + t.pnl, 0);
+    const grossLoss = Math.abs(losses.reduce((a, t) => a + t.pnl, 0));
+    const rets = [];
+    for (let i = 1; i < curve.length; i++) if (curve[i - 1] > 0) rets.push(curve[i] / curve[i - 1] - 1);
+    let sharpe = 0;
+    if (rets.length > 2) {
+      const m = rets.reduce((a, b) => a + b, 0) / rets.length;
+      const sd = Math.sqrt(rets.reduce((a, r) => a + (r - m) ** 2, 0) / (rets.length - 1));
+      sharpe = sd > 0 ? (m / sd) * Math.sqrt(252) : 0;
+    }
+    return {
+      kind: 'autotrade', mode: 'paper', bars: prices.length, armed, killed,
+      killReason: killReason || null, startingEquity: cfg.startingEquity,
+      finalEquity: Math.round(final * 100) / 100,
+      totalReturnPct: Math.round(totalReturn * 10000) / 100,
+      buyHoldReturnPct: Math.round(bh * 10000) / 100,
+      openPosition: null, trades, tradeCount: trades.length,
+      winRate: trades.length ? r4(wins.length / trades.length) : null,
+      wins: wins.length, losses: losses.length,
+      profitFactor: grossLoss > 0 ? Math.round((grossWin / grossLoss) * 100) / 100
+        : (wins.length ? Infinity : null),
+      maxDrawdownPct: Math.round(maxDd * 10000) / 100,
+      sharpe: Math.round(sharpe * 100) / 100,
+      fills, realizedPnl: Math.round(realizedPnl * 100) / 100,
+      equityCurve: curve, actions, disclaimer: PAPER_NOTE,
+    };
+  }
   function backtest(values, warmup = 12, confidenceThreshold = 0.6) {
     values = values.map(Number);
     const n = values.length;
@@ -558,6 +718,6 @@
   return {
     DISCLAIMER, indicators, predictDirection, scenarios, forecastSeries,
     predictSequence, eventProbability, assessRisk, analyzeMarket, backtest,
-    extractSeries, extractSymbol,
+    autoTrade, extractSeries, extractSymbol,
   };
 });

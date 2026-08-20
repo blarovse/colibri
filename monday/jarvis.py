@@ -118,6 +118,14 @@ class JarvisConsole:
         if low.startswith('load'):
             return self._load(text)
 
+        # --- capture an inline series early so commands can use it ------
+        nums = _numbers(text)
+        if len(nums) >= 3:
+            self.series = nums
+            symbolic = _symbol_from(text)
+            if symbolic:
+                self.symbol = symbolic
+
         # --- event probability ------------------------------------------
         if any(w in low for w in ('odds', 'probab', 'chance', 'likel')):
             reply = self._event(text)
@@ -133,11 +141,10 @@ class JarvisConsole:
             return self._risk()
         if low == 'brief':
             return self._brief()
+        if low.startswith(('autotrade', 'auto trade', 'auto-trade')):
+            return self._autotrade(text)
 
         # --- sequence / series work --------------------------------------
-        nums = _numbers(text)
-        symbolic = _symbol_from(text)
-
         wants_sequence = bool(
             re.search(r'next (number|term|value|digit)', low)
             or 'sequence' in low or 'pattern' in low
@@ -151,9 +158,6 @@ class JarvisConsole:
             'forecast', 'predict', 'next value', 'next', 'projection', 'outlook'))
 
         if len(nums) >= 3:
-            self.series = nums
-            if symbolic:
-                self.symbol = symbolic
             wants_point = bool(re.search(r'next (number|term|value)', low)) or 'forecast' in low
             if wants_sequence and all(float(v).is_integer() for v in nums):
                 return self._sequence()
@@ -256,6 +260,20 @@ class JarvisConsole:
     def _no_series(what: str) -> str:
         return (f"I need numbers before I can judge {what}, sir. "
                 f"Paste a series or 'load <file>' first.")
+
+    def _autotrade(self, text: str) -> str:
+        """Run the autonomous paper trader over the current series."""
+        if not self.series:
+            return self._no_series("auto-trading")
+        from .trader import AutoTrader, TraderConfig, format_report
+        config = TraderConfig()
+        # optional equity override: "autotrade with 5000"
+        import re as _re
+        m = _re.search(r'(\d+(?:\.\d+)?)\s*(?:equity|capital|usd|\$)?', text)
+        if m and float(m.group(1)) >= 100:
+            config.starting_equity = float(m.group(1))
+        report = AutoTrader.simulate(self.series, config)
+        return format_report(report)
 
     def _brief(self) -> str:
         if not self.series:

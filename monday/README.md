@@ -210,6 +210,21 @@ python -m monday.jarvis --demo
 > Every market output carries an explicit disclaimer: these are
 > transparent statistical estimates, **not financial advice**.
 
+**Autonomous trading — on command, on paper.** Jarvis arms when you say so
+and then trades entirely on its own: signal → risk check → sized entry →
+stop-loss/take-profit/signal-flip exits → P&L, with a drawdown kill switch
+and a consecutive-loss circuit breaker. **Paper mode only**: simulated
+fills (commission + slippage modeled), no exchange contacted, no keys.
+
+```
+python -m monday.trader prices.csv            # arms, trades the whole series, reports
+python -m monday.trader --demo
+# in the Jarvis console / app: "autotrade"  (or the ⚡ Auto-trade chip)
+```
+
+Real-money wiring is deliberately absent. If you ever add a live broker
+yourself: testnet first, keep the risk limits, and re-read the backtest.
+
 **As a downloadable app** — Jarvis also ships as an offline single-file web
 app (plus installable PWA) in [`monday/app/`](app/README.md):
 

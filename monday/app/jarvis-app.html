@@ -175,6 +175,7 @@
       <span class="chip" data-q="scenarios">Scenarios</span>
       <span class="chip" data-q="risk">Risk</span>
       <span class="chip" data-q="backtest">Backtest</span>
+      <span class="chip" data-q="autotrade" style="border-color:#2b6fd6">⚡ Auto-trade</span>
       <span class="chip" data-q="brief">Full brief</span>
       <span class="chip" data-q="sequence">Sequence puzzle</span>
       <span class="chip" data-q="odds">Event odds</span>
@@ -671,7 +672,167 @@
     };
   }
 
-  // ---------------------------------------------------------------- backtest
+  // ---------------------------------------------------------------- autotrade
+  const TRADER_DEFAULTS = {
+    startingEquity: 10000, positionFraction: 0.10, confidenceMin: 0.60,
+    probMin: 0.60, stopLossPct: 0.03, takeProfitPct: 0.06, commissionBps: 10,
+    slippageBps: 5, maxDrawdownKill: 0.20, maxConsecutiveLosses: 5,
+    warmup: 12, allowShort: false,
+  };
+  const PAPER_NOTE = 'Paper execution only — simulated fills, no exchange contacted, no real ' +
+    'money. Past (simulated) performance never guarantees future results.';
+
+  function autoTrade(series, overrides) {
+    const cfg = Object.assign({}, TRADER_DEFAULTS, overrides || {});
+    series = series.map(Number);
+    const costs = (price, qty) => price * qty * (cfg.commissionBps / 10000);
+    let cash = cfg.startingEquity, position = null, realizedPnl = 0, fills = 0;
+    let armed = true, killed = false, killReason = '';
+    let consecutiveLosses = 0, peak = cfg.startingEquity;
+    const trades = [], equityCurve = [], prices = [], actions = [];
+
+    const r4 = (x) => Math.round(x * 10000) / 10000;
+
+    function buy(index, price) {
+      if (position) return null;
+      const slipped = price * (1 + cfg.slippageBps / 10000);
+      if (slipped <= 0 || cash <= 0) return null;
+      const budget = Math.min(cash * cfg.positionFraction, cash);
+      let qty = budget / slipped;
+      while (qty > 0) {
+        const cost = qty * slipped + costs(slipped, qty);
+        if (cost <= budget * 1.0000001) break;
+        qty *= 0.999;
+      }
+      const cost = qty * slipped + costs(slipped, qty);
+      if (qty <= 0 || cost > cash) return null;
+      cash -= cost; fills++;
+      position = {
+        side: 'long', entryIndex: index, entryPrice: slipped, quantity: qty,
+        stopPrice: slipped * (1 - cfg.stopLossPct),
+        targetPrice: slipped * (1 + cfg.takeProfitPct),
+      };
+      return position;
+    }
+    function close(index, price, reason) {
+      if (!position) return null;
+      const slipped = price * (1 - cfg.slippageBps / 10000);
+      const proceeds = slipped * position.quantity - costs(slipped, position.quantity);
+      cash += proceeds; fills++;
+      const pnl = proceeds - (position.entryPrice * position.quantity +
+        costs(position.entryPrice, position.quantity));
+      realizedPnl += pnl;
+      const trade = {
+        side: position.side, entryIndex: position.entryIndex,
+        entryPrice: position.entryPrice, exitIndex: index, exitPrice: slipped,
+        quantity: position.quantity, pnl: r4(pnl), reason,
+      };
+      position = null;
+      return trade;
+    }
+    function kill(reason) {
+      killed = true; killReason = reason;
+      if (position && prices.length) {
+        const t = close(prices.length - 1, prices[prices.length - 1], 'manual');
+        if (t) record(t);
+      }
+      armed = false;
+      actions.push('KILL SWITCH: ' + reason);
+    }
+    function record(trade) {
+      trades.push(trade);
+      if (trade.pnl < 0) {
+        consecutiveLosses++;
+        if (consecutiveLosses >= cfg.maxConsecutiveLosses) kill(consecutiveLosses + ' consecutive losses');
+      } else consecutiveLosses = 0;
+    }
+
+    // ---- the autonomous loop, one bar at a time ----
+    for (let i = 0; i < series.length; i++) {
+      const price = series[i];
+      prices.push(price);
+      const eq = position ? cash + position.quantity * price : cash;
+      equityCurve.push(r4(eq));
+      if (eq > peak) peak = eq;
+
+      // 1) drawdown kill switch runs whenever a position exists
+      if (position && 1 - eq / peak >= cfg.maxDrawdownKill) {
+        kill('max drawdown breached');
+        continue;
+      }
+      if (killed || !armed || i < cfg.warmup) continue;
+
+      // 2) exits: stop / target
+      if (position) {
+        let reason = null;
+        if (price <= position.stopPrice) reason = 'stop_loss';
+        else if (price >= position.targetPrice) reason = 'take_profit';
+        if (reason) {
+          const t = close(i, price, reason);
+          if (t) record(t);
+        }
+      }
+
+      // 3) exit on confident opposite signal
+      if (position && prices.length >= 6) {
+        const pred = predictDirection(prices);
+        if (pred.verdict === 'DOWN' && pred.confidence >= cfg.confidenceMin) {
+          const t = close(i, price, 'signal_flip');
+          if (t) record(t);
+        }
+      }
+
+      // 4) entry on a confident UP signal
+      if (!position && !killed && prices.length >= 6) {
+        const pred = predictDirection(prices);
+        if (pred.verdict === 'UP' && pred.confidence >= cfg.confidenceMin &&
+            pred.probabilities.up >= cfg.probMin) buy(i, price);
+      }
+    }
+    // disarm + flatten
+    if (position && prices.length) {
+      const t = close(prices.length - 1, prices[prices.length - 1], 'manual');
+      if (t) record(t);
+    }
+    armed = false;
+
+    // ---- report ----
+    const curve = equityCurve.length ? equityCurve : [cfg.startingEquity];
+    const final = curve[curve.length - 1];
+    const totalReturn = final / cfg.startingEquity - 1;
+    const startI = Math.min(cfg.warmup, prices.length - 1);
+    const bh = prices.length >= 2 && prices[0]
+      ? prices[prices.length - 1] / prices[startI] - 1 : 0;
+    let pk = curve[0], maxDd = 0;
+    curve.forEach((e2) => { if (e2 > pk) pk = e2; if (pk > 0) maxDd = Math.min(maxDd, e2 / pk - 1); });
+    const wins = trades.filter((t) => t.pnl > 0), losses = trades.filter((t) => t.pnl <= 0);
+    const grossWin = wins.reduce((a, t) => a + t.pnl, 0);
+    const grossLoss = Math.abs(losses.reduce((a, t) => a + t.pnl, 0));
+    const rets = [];
+    for (let i = 1; i < curve.length; i++) if (curve[i - 1] > 0) rets.push(curve[i] / curve[i - 1] - 1);
+    let sharpe = 0;
+    if (rets.length > 2) {
+      const m = rets.reduce((a, b) => a + b, 0) / rets.length;
+      const sd = Math.sqrt(rets.reduce((a, r) => a + (r - m) ** 2, 0) / (rets.length - 1));
+      sharpe = sd > 0 ? (m / sd) * Math.sqrt(252) : 0;
+    }
+    return {
+      kind: 'autotrade', mode: 'paper', bars: prices.length, armed, killed,
+      killReason: killReason || null, startingEquity: cfg.startingEquity,
+      finalEquity: Math.round(final * 100) / 100,
+      totalReturnPct: Math.round(totalReturn * 10000) / 100,
+      buyHoldReturnPct: Math.round(bh * 10000) / 100,
+      openPosition: null, trades, tradeCount: trades.length,
+      winRate: trades.length ? r4(wins.length / trades.length) : null,
+      wins: wins.length, losses: losses.length,
+      profitFactor: grossLoss > 0 ? Math.round((grossWin / grossLoss) * 100) / 100
+        : (wins.length ? Infinity : null),
+      maxDrawdownPct: Math.round(maxDd * 10000) / 100,
+      sharpe: Math.round(sharpe * 100) / 100,
+      fills, realizedPnl: Math.round(realizedPnl * 100) / 100,
+      equityCurve: curve, actions, disclaimer: PAPER_NOTE,
+    };
+  }
   function backtest(values, warmup = 12, confidenceThreshold = 0.6) {
     values = values.map(Number);
     const n = values.length;
@@ -763,7 +924,7 @@
   return {
     DISCLAIMER, indicators, predictDirection, scenarios, forecastSeries,
     predictSequence, eventProbability, assessRisk, analyzeMarket, backtest,
-    extractSeries, extractSymbol,
+    autoTrade, extractSeries, extractSymbol,
   };
 });
 
@@ -845,6 +1006,55 @@ function drawChart(series, forecast) {
   // last value dot
   ctx.fillStyle = '#4cc3ff'; ctx.beginPath();
   ctx.arc(x(view.length - 1), y(view[view.length - 1]), 3.5, 0, 7); ctx.fill();
+}
+function drawAutoTrade(result, series) {
+  const cv = $('chart'), ctx = cv.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const W = cv.clientWidth, H = 190;
+  cv.width = W * dpr; cv.height = H * dpr; ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, W, H);
+  const n = Math.max(result.equityCurve.length, series.length);
+  if (n < 2) return;
+  // both lines as % of their starting value
+  const eq0 = result.equityCurve[0], p0 = series[0];
+  const eqPct = result.equityCurve.map((v) => (v / eq0 - 1) * 100);
+  const bhPct = series.map((v) => (v / p0 - 1) * 100);
+  const all = eqPct.concat(bhPct);
+  let lo = Math.min(...all), hi = Math.max(...all);
+  if (hi - lo < 0.5) { hi += 0.25; lo -= 0.25; }
+  const pad = (hi - lo) * 0.12;
+  lo -= pad; hi += pad;
+  const y = (v) => H - 22 - ((v - lo) / (hi - lo)) * (H - 40);
+  const x = (i) => 14 + (i / (n - 1)) * (W - 28);
+  // zero line
+  if (lo < 0 && hi > 0) {
+    ctx.strokeStyle = '#5a6699'; ctx.setLineDash([2, 4]); ctx.beginPath();
+    ctx.moveTo(10, y(0)); ctx.lineTo(W - 10, y(0)); ctx.stroke(); ctx.setLineDash([]);
+  }
+  // buy & hold (dim)
+  ctx.strokeStyle = '#5a6699'; ctx.lineWidth = 1.5; ctx.beginPath();
+  bhPct.forEach((v, i) => (i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v))));
+  ctx.stroke();
+  // strategy equity (bold cyan)
+  ctx.strokeStyle = '#4cc3ff'; ctx.lineWidth = 2.2; ctx.beginPath();
+  eqPct.forEach((v, i) => (i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v))));
+  ctx.stroke();
+  // trade markers
+  result.trades.forEach((t) => {
+    ctx.fillStyle = '#2ecc8f'; ctx.beginPath();
+    ctx.moveTo(x(t.entryIndex), y(eqPct[t.entryIndex] || 0) - 4);
+    ctx.lineTo(x(t.entryIndex) - 4, y(eqPct[t.entryIndex] || 0) + 3);
+    ctx.lineTo(x(t.entryIndex) + 4, y(eqPct[t.entryIndex] || 0) + 3); ctx.fill();
+    ctx.fillStyle = '#ff5c7a'; ctx.beginPath();
+    ctx.moveTo(x(t.exitIndex), y(eqPct[t.exitIndex] || 0) + 4);
+    ctx.lineTo(x(t.exitIndex) - 4, y(eqPct[t.exitIndex] || 0) - 3);
+    ctx.lineTo(x(t.exitIndex) + 4, y(eqPct[t.exitIndex] || 0) - 3); ctx.fill();
+  });
+  ctx.fillStyle = '#8b96c9'; ctx.font = '10px ui-monospace, monospace'; ctx.textAlign = 'left';
+  ctx.fillText('— Jarvis (paper)', 14, 14);
+  ctx.fillStyle = '#5a6699'; ctx.fillText('-- buy & hold', 110, 14);
+  ctx.fillStyle = '#cfeeff'; ctx.textAlign = 'right';
+  ctx.fillText(`${eqPct[eqPct.length - 1] > 0 ? '+' : ''}${eqPct[eqPct.length - 1].toFixed(1)}%`, W - 12, y(eqPct[eqPct.length - 1]) - 8);
 }
 const fmt = (v) => (Math.abs(v) >= 1000 ? v.toFixed(0) : Math.abs(v) >= 10 ? v.toFixed(1) : v.toPrecision(4));
 
@@ -985,6 +1195,27 @@ function render(result, series) {
       drawChart(series);
       break;
     }
+    case 'autotrade': {
+      const ret = result.totalReturnPct, bh = result.buyHoldReturnPct;
+      const win_ = ret >= 0 ? 'var(--up)' : 'var(--down)';
+      const beat = ret >= bh;
+      box.innerHTML = `
+        <div class="verdict"><span class="big" style="background:#0c142e;border:1px solid var(--line);color:${win_}">${ret > 0 ? '+' : ''}${ret.toFixed(2)}%</span>
+          <div class="stat">paper account <b>${fmt(result.startingEquity)}</b> → <b>${fmt(result.finalEquity)}</b>
+          · buy&amp;hold <b>${bh > 0 ? '+' : ''}${bh.toFixed(2)}%</b> ${beat ? '( Jarvis ahead )' : '( buy&amp;hold ahead )'}
+          · ${result.tradeCount} trades</div></div>
+        <div class="grid3">
+          <div class="tile"><div class="k">win rate</div><div class="v">${result.winRate != null ? (result.winRate * 100).toFixed(0) + '%' : '—'}</div><div class="s">${result.wins}W / ${result.losses}L</div></div>
+          <div class="tile"><div class="k">max drawdown</div><div class="v" style="color:var(--down)">${result.maxDrawdownPct.toFixed(2)}%</div></div>
+          <div class="tile"><div class="k">Sharpe ≈</div><div class="v">${result.sharpe}</div><div class="s">profit factor ${result.profitFactor === Infinity ? '∞' : result.profitFactor ?? '—'}</div></div>
+        </div>
+        ${result.killed ? `<div class="warn">⚠ KILL SWITCH: ${result.killReason} — trading halted automatically</div>` : ''}
+        ${result.trades.length ? `<div class="meta" style="margin-top:10px">${result.trades.slice(-8).map((t) =>
+          `<div style="margin:3px 0">▲ in@${fmt(t.entryPrice)} → ▼ out@${fmt(t.exitPrice)} · <b style="color:${t.pnl >= 0 ? 'var(--up)' : 'var(--down)'}">${t.pnl >= 0 ? '+' : ''}${fmt(t.pnl)}</b> · ${t.reason.replace('_', ' ')}</div>`).join('')}</div>` : '<div class="meta">No qualifying signals — Jarvis stayed flat.</div>'}
+        <div class="disclaimer">◆ ${result.disclaimer}</div>`;
+      drawAutoTrade(result, series);
+      break;
+    }
     default: box.innerHTML = `<pre style="font-size:12px;white-space:pre-wrap">${JSON.stringify(result, null, 1)}</pre>`;
   }
   $('answer-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -1020,6 +1251,12 @@ function route(question) {
   // sequence
   const wantsSeq = /next (number|term|value|digit)|sequence|pattern/.test(low);
   if (wantsSeq && st.series.length >= 3) return E.predictSequence(st.series);
+
+  // autonomous paper trading on command
+  if (/auto.?trade|trade it|trade for me|go autonomous|start trading/.test(low)) {
+    if (st.series.length >= 17) return E.autoTrade(st.series);
+    return { error: 'Auto-trade needs at least 17 bars, sir — load a longer series.' };
+  }
 
   // backtest: measure the model on this series
   if (/backtest|hit rate|accuracy|how good|how often/.test(low) && st.series.length >= 17)
@@ -1068,6 +1305,7 @@ function summarize(r) {
     case 'scenarios': return r.scenarios.map((s) => `${s.name} ${fmt(s.target)} (${(s.probability * 100).toFixed(0)}%)`).join(' · ');
     case 'risk': return `risk ${r.riskLabel.toUpperCase()} ${r.riskScore}/10 · VaR95 ${r.historicalVar95Pct}% · DD ${r.maxDrawdownPct}%`;
     case 'event_probability': return `probability ${(r.probability * 100).toFixed(1)}%`;
+    case 'autotrade': return `auto-trade: ${r.totalReturnPct > 0 ? '+' : ''}${r.totalReturnPct}% (buy&hold ${r.buyHoldReturnPct > 0 ? '+' : ''}${r.buyHoldReturnPct}%) · ${r.tradeCount} trades · paper`;
     case 'backtest': return `backtest: ${(r.hitRate * 100).toFixed(1)}% hit rate over ${r.predictions} calls — ${r.verdict}`;
     case 'market_brief': return `brief: ${r.direction.verdict} · risk ${r.risk.riskLabel}`;
     default: return null;

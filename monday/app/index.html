@@ -174,6 +174,7 @@
       <span class="chip" data-q="scenarios">Scenarios</span>
       <span class="chip" data-q="risk">Risk</span>
       <span class="chip" data-q="backtest">Backtest</span>
+      <span class="chip" data-q="autotrade" style="border-color:#2b6fd6">⚡ Auto-trade</span>
       <span class="chip" data-q="brief">Full brief</span>
       <span class="chip" data-q="sequence">Sequence puzzle</span>
       <span class="chip" data-q="odds">Event odds</span>
@@ -279,6 +280,55 @@ function drawChart(series, forecast) {
   // last value dot
   ctx.fillStyle = '#4cc3ff'; ctx.beginPath();
   ctx.arc(x(view.length - 1), y(view[view.length - 1]), 3.5, 0, 7); ctx.fill();
+}
+function drawAutoTrade(result, series) {
+  const cv = $('chart'), ctx = cv.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const W = cv.clientWidth, H = 190;
+  cv.width = W * dpr; cv.height = H * dpr; ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, W, H);
+  const n = Math.max(result.equityCurve.length, series.length);
+  if (n < 2) return;
+  // both lines as % of their starting value
+  const eq0 = result.equityCurve[0], p0 = series[0];
+  const eqPct = result.equityCurve.map((v) => (v / eq0 - 1) * 100);
+  const bhPct = series.map((v) => (v / p0 - 1) * 100);
+  const all = eqPct.concat(bhPct);
+  let lo = Math.min(...all), hi = Math.max(...all);
+  if (hi - lo < 0.5) { hi += 0.25; lo -= 0.25; }
+  const pad = (hi - lo) * 0.12;
+  lo -= pad; hi += pad;
+  const y = (v) => H - 22 - ((v - lo) / (hi - lo)) * (H - 40);
+  const x = (i) => 14 + (i / (n - 1)) * (W - 28);
+  // zero line
+  if (lo < 0 && hi > 0) {
+    ctx.strokeStyle = '#5a6699'; ctx.setLineDash([2, 4]); ctx.beginPath();
+    ctx.moveTo(10, y(0)); ctx.lineTo(W - 10, y(0)); ctx.stroke(); ctx.setLineDash([]);
+  }
+  // buy & hold (dim)
+  ctx.strokeStyle = '#5a6699'; ctx.lineWidth = 1.5; ctx.beginPath();
+  bhPct.forEach((v, i) => (i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v))));
+  ctx.stroke();
+  // strategy equity (bold cyan)
+  ctx.strokeStyle = '#4cc3ff'; ctx.lineWidth = 2.2; ctx.beginPath();
+  eqPct.forEach((v, i) => (i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v))));
+  ctx.stroke();
+  // trade markers
+  result.trades.forEach((t) => {
+    ctx.fillStyle = '#2ecc8f'; ctx.beginPath();
+    ctx.moveTo(x(t.entryIndex), y(eqPct[t.entryIndex] || 0) - 4);
+    ctx.lineTo(x(t.entryIndex) - 4, y(eqPct[t.entryIndex] || 0) + 3);
+    ctx.lineTo(x(t.entryIndex) + 4, y(eqPct[t.entryIndex] || 0) + 3); ctx.fill();
+    ctx.fillStyle = '#ff5c7a'; ctx.beginPath();
+    ctx.moveTo(x(t.exitIndex), y(eqPct[t.exitIndex] || 0) + 4);
+    ctx.lineTo(x(t.exitIndex) - 4, y(eqPct[t.exitIndex] || 0) - 3);
+    ctx.lineTo(x(t.exitIndex) + 4, y(eqPct[t.exitIndex] || 0) - 3); ctx.fill();
+  });
+  ctx.fillStyle = '#8b96c9'; ctx.font = '10px ui-monospace, monospace'; ctx.textAlign = 'left';
+  ctx.fillText('— Jarvis (paper)', 14, 14);
+  ctx.fillStyle = '#5a6699'; ctx.fillText('-- buy & hold', 110, 14);
+  ctx.fillStyle = '#cfeeff'; ctx.textAlign = 'right';
+  ctx.fillText(`${eqPct[eqPct.length - 1] > 0 ? '+' : ''}${eqPct[eqPct.length - 1].toFixed(1)}%`, W - 12, y(eqPct[eqPct.length - 1]) - 8);
 }
 const fmt = (v) => (Math.abs(v) >= 1000 ? v.toFixed(0) : Math.abs(v) >= 10 ? v.toFixed(1) : v.toPrecision(4));
 
@@ -419,6 +469,27 @@ function render(result, series) {
       drawChart(series);
       break;
     }
+    case 'autotrade': {
+      const ret = result.totalReturnPct, bh = result.buyHoldReturnPct;
+      const win_ = ret >= 0 ? 'var(--up)' : 'var(--down)';
+      const beat = ret >= bh;
+      box.innerHTML = `
+        <div class="verdict"><span class="big" style="background:#0c142e;border:1px solid var(--line);color:${win_}">${ret > 0 ? '+' : ''}${ret.toFixed(2)}%</span>
+          <div class="stat">paper account <b>${fmt(result.startingEquity)}</b> → <b>${fmt(result.finalEquity)}</b>
+          · buy&amp;hold <b>${bh > 0 ? '+' : ''}${bh.toFixed(2)}%</b> ${beat ? '( Jarvis ahead )' : '( buy&amp;hold ahead )'}
+          · ${result.tradeCount} trades</div></div>
+        <div class="grid3">
+          <div class="tile"><div class="k">win rate</div><div class="v">${result.winRate != null ? (result.winRate * 100).toFixed(0) + '%' : '—'}</div><div class="s">${result.wins}W / ${result.losses}L</div></div>
+          <div class="tile"><div class="k">max drawdown</div><div class="v" style="color:var(--down)">${result.maxDrawdownPct.toFixed(2)}%</div></div>
+          <div class="tile"><div class="k">Sharpe ≈</div><div class="v">${result.sharpe}</div><div class="s">profit factor ${result.profitFactor === Infinity ? '∞' : result.profitFactor ?? '—'}</div></div>
+        </div>
+        ${result.killed ? `<div class="warn">⚠ KILL SWITCH: ${result.killReason} — trading halted automatically</div>` : ''}
+        ${result.trades.length ? `<div class="meta" style="margin-top:10px">${result.trades.slice(-8).map((t) =>
+          `<div style="margin:3px 0">▲ in@${fmt(t.entryPrice)} → ▼ out@${fmt(t.exitPrice)} · <b style="color:${t.pnl >= 0 ? 'var(--up)' : 'var(--down)'}">${t.pnl >= 0 ? '+' : ''}${fmt(t.pnl)}</b> · ${t.reason.replace('_', ' ')}</div>`).join('')}</div>` : '<div class="meta">No qualifying signals — Jarvis stayed flat.</div>'}
+        <div class="disclaimer">◆ ${result.disclaimer}</div>`;
+      drawAutoTrade(result, series);
+      break;
+    }
     default: box.innerHTML = `<pre style="font-size:12px;white-space:pre-wrap">${JSON.stringify(result, null, 1)}</pre>`;
   }
   $('answer-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -454,6 +525,12 @@ function route(question) {
   // sequence
   const wantsSeq = /next (number|term|value|digit)|sequence|pattern/.test(low);
   if (wantsSeq && st.series.length >= 3) return E.predictSequence(st.series);
+
+  // autonomous paper trading on command
+  if (/auto.?trade|trade it|trade for me|go autonomous|start trading/.test(low)) {
+    if (st.series.length >= 17) return E.autoTrade(st.series);
+    return { error: 'Auto-trade needs at least 17 bars, sir — load a longer series.' };
+  }
 
   // backtest: measure the model on this series
   if (/backtest|hit rate|accuracy|how good|how often/.test(low) && st.series.length >= 17)
@@ -502,6 +579,7 @@ function summarize(r) {
     case 'scenarios': return r.scenarios.map((s) => `${s.name} ${fmt(s.target)} (${(s.probability * 100).toFixed(0)}%)`).join(' · ');
     case 'risk': return `risk ${r.riskLabel.toUpperCase()} ${r.riskScore}/10 · VaR95 ${r.historicalVar95Pct}% · DD ${r.maxDrawdownPct}%`;
     case 'event_probability': return `probability ${(r.probability * 100).toFixed(1)}%`;
+    case 'autotrade': return `auto-trade: ${r.totalReturnPct > 0 ? '+' : ''}${r.totalReturnPct}% (buy&hold ${r.buyHoldReturnPct > 0 ? '+' : ''}${r.buyHoldReturnPct}%) · ${r.tradeCount} trades · paper`;
     case 'backtest': return `backtest: ${(r.hitRate * 100).toFixed(1)}% hit rate over ${r.predictions} calls — ${r.verdict}`;
     case 'market_brief': return `brief: ${r.direction.verdict} · risk ${r.risk.riskLabel}`;
     default: return null;
