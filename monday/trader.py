@@ -382,11 +382,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         series = __import__('monday.backtest', fromlist=['demo_series']).demo_series(250)
         print(f"◆ demo series: {len(series)} points (seeded random walk, mild drift)")
     else:
-        with open(args.file, 'r', encoding='utf-8') as fh:
-            series = [float(m) for m in re.findall(r'-?\d+(?:\.\d+)?', fh.read())]
-        if len(series) < 20:
-            print(f"need ≥20 points, got {len(series)}")
-            return 1
+        from .backtest import load_series_file
+        series = load_series_file(args.file)
         print(f"◆ loaded {len(series)} points from {args.file}")
 
     config = TraderConfig(starting_equity=args.equity, position_fraction=args.fraction,

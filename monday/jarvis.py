@@ -374,7 +374,14 @@ class JarvisConsole:
                 content = fh.read()
         except OSError as e:
             return f"I can't read that file, sir: {e}"
-        nums = _numbers(content)
+        from .backtest import _try_float
+        import re as _re
+        nums = []
+        for line in content.splitlines():
+            fields = [f for f in _re.split(r'[,;\t ]+', line.strip()) if f]
+            line_nums = [v for v in (_try_float(f) for f in fields) if v is not None]
+            if line_nums:
+                nums.append(line_nums[-1] if len(line_nums) > 1 else line_nums[0])
         if len(nums) < 3:
             return "That file has fewer than three numbers, sir — not enough to forecast."
         self.series = nums

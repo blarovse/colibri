@@ -29,16 +29,61 @@ import sys
 from .agents.prediction_agent import PredictionAgent
 
 
+def _try_float(text: str) -> Optional[float]:
+    try:
+        return float(text)
+    except (TypeError, ValueError):
+        return None
+
+
 def load_series_file(path: str) -> List[float]:
-    """Extract the numeric series from a CSV/TXT file."""
+    """
+    Extract a price series from a CSV/TXT file, date-safe.
+
+    Handles: "date,close" CSVs (with or without header), bare single-column
+    files, and multi-column rows (takes the LAST numeric field, which is the
+    close in date-first exports). Dates like 2025-08-21 never become prices.
+    """
     with open(path, 'r', encoding='utf-8') as fh:
-        content = fh.read()
-    nums = [float(m) for m in re.findall(r'-?\d+(?:\.\d+)?', content)]
-    if len(nums) < 20:
+        lines = [ln.strip() for ln in fh.read().splitlines() if ln.strip()]
+
+    def numbers_in(line: str) -> List[float]:
+        out = []
+        for field in re.split(r'[,;\t ]+', line):
+            v = _try_float(field)
+            if v is not None:
+                out.append(v)
+        return out
+
+    rows = lines
+    header = None
+    if rows and not numbers_in(rows[0]):
+        header = [h.strip().lower() for h in re.split(r'[,;\t]+', rows[0])]
+        rows = rows[1:]
+
+    values: List[float] = []
+    if header:
+        keys = ('close', 'adj close', 'adj_close', 'close/last', 'price', 'last', 'value')
+        idx = next((i for i, h in enumerate(header)
+                    if h.strip('"\ ') in keys or any(k in h for k in keys)),
+                   len(header) - 1)
+        for row in rows:
+            fields = re.split(r'[,;\t]+', row)
+            v = _try_float(fields[idx].strip('"\ ')) if idx < len(fields) else None
+            if v is not None:
+                values.append(v)
+    else:
+        for row in rows:
+            nums = numbers_in(row)
+            if not nums:
+                continue
+            values.append(nums[-1] if len(nums) > 1 else nums[0])
+
+    if len(values) < 20:
         raise SystemExit(
-            f"Need at least 20 points for a meaningful backtest (got {len(nums)})."
+            f"Need at least 20 points for a meaningful backtest (got {len(values)})."
         )
-    return nums
+    return values
 
 
 def demo_series(n: int = 200, seed: int = 7) -> List[float]:
