@@ -85,6 +85,7 @@ monday/
 ├── core/               # Core brain, orchestrator, task analyzer, planner
 ├── agents/             # Specialist agents (coding, prediction/Jarvis, ...)
 ├── jarvis.py           # Jarvis prediction console (python -m monday.jarvis)
+├── app/                # Jarvis as a downloadable offline app (single-file + PWA)
 ├── tools/              # Tool execution layer (browser, terminal, files, android, git, builds)
 ├── memory/             # Short-term, task, project, long-term preferences, knowledge memory
 ├── automation/         # Automation engine and executors (Windows, Browser, Android, File, Shell)
@@ -196,6 +197,14 @@ python -m monday.jarvis --demo
 
 > Every market output carries an explicit disclaimer: these are
 > transparent statistical estimates, **not financial advice**.
+
+**As a downloadable app** — Jarvis also ships as an offline single-file web
+app (plus installable PWA) in [`monday/app/`](app/README.md):
+
+```
+monday/app/jarvis-app.html    # one file — download, open anywhere, works offline
+python -m http.server 8080    # or host the folder and "Add to Home Screen"
+```
 
 ### Creative Task
 

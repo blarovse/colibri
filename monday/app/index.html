@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0f1e">
+<title>JARVIS — prediction engine</title>
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+  :root {
+    --bg: #0a0f1e; --panel: #101733; --panel2: #0d1328; --line: #1d2a55;
+    --ink: #e8edff; --dim: #8b96c9; --cyan: #4cc3ff; --cyan2: #2196f3;
+    --up: #2ecc8f; --down: #ff5c7a; --flat: #f4b63f; --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: radial-gradient(1200px 500px at 50% -10%, #14224d 0%, var(--bg) 60%);
+    color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+    min-height: 100vh; padding-bottom: 96px;
+  }
+  header {
+    position: sticky; top: 0; z-index: 10; backdrop-filter: blur(12px);
+    background: rgba(10, 15, 30, .82); border-bottom: 1px solid var(--line);
+    padding: 14px 18px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  }
+  .logo {
+    width: 38px; height: 38px; border-radius: 50%; flex: none;
+    background: radial-gradient(circle at 50% 45%, #9fe6ff 0%, #2196f3 45%, #0b1c3d 100%);
+    box-shadow: 0 0 18px rgba(76, 195, 255, .55), inset 0 0 8px rgba(255,255,255,.35);
+    position: relative;
+  }
+  .logo::after {
+    content: ""; position: absolute; inset: 9px; border-radius: 50%;
+    border: 2px solid rgba(10, 20, 45, .8); border-top-color: transparent; transform: rotate(40deg);
+  }
+  h1 { font-size: 19px; letter-spacing: .16em; font-weight: 700; }
+  h1 small { display: block; font-size: 11px; letter-spacing: .06em; color: var(--dim); font-weight: 500; margin-top: 2px; }
+  .offline { margin-left: auto; font-size: 11px; color: var(--dim); border: 1px solid var(--line); padding: 4px 10px; border-radius: 999px; }
+  .offline b { color: var(--up); font-weight: 600; }
+  main { max-width: 860px; margin: 0 auto; padding: 18px 14px 0; }
+  .card {
+    background: linear-gradient(180deg, var(--panel) 0%, var(--panel2) 100%);
+    border: 1px solid var(--line); border-radius: 16px; padding: 16px; margin-bottom: 14px;
+  }
+  .card h2 { font-size: 12px; letter-spacing: .18em; color: var(--dim); font-weight: 600; margin-bottom: 12px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  input[type=text], textarea, select {
+    background: #0a1128; color: var(--ink); border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px 12px; font-size: 15px; font-family: inherit; outline: none; width: 100%;
+  }
+  input:focus, textarea:focus { border-color: var(--cyan2); box-shadow: 0 0 0 3px rgba(33,150,243,.18); }
+  textarea { font-family: var(--mono); font-size: 14px; min-height: 74px; resize: vertical; }
+  .field { flex: 1; min-width: 130px; }
+  .field label { display: block; font-size: 11px; color: var(--dim); margin: 0 2px 5px; letter-spacing: .06em; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip {
+    border: 1px solid var(--line); background: #0c142e; color: var(--ink);
+    padding: 9px 14px; border-radius: 999px; font-size: 14px; cursor: pointer; user-select: none;
+    transition: all .15s ease;
+  }
+  .chip:hover { border-color: var(--cyan2); }
+  .chip.active { background: linear-gradient(180deg, #2b6fd6, #1c4fa8); border-color: #4c8fe8; box-shadow: 0 2px 12px rgba(33,150,243,.35); }
+  button.primary {
+    background: linear-gradient(180deg, #35c7ff, #1a7fe0); border: none; color: #04101f;
+    font-weight: 700; font-size: 15px; border-radius: 12px; padding: 12px 20px; cursor: pointer;
+    box-shadow: 0 4px 18px rgba(53, 199, 255, .35);
+  }
+  button.primary:active { transform: translateY(1px); }
+  button.ghost {
+    background: transparent; border: 1px solid var(--line); color: var(--dim);
+    border-radius: 10px; padding: 9px 14px; font-size: 13px; cursor: pointer;
+  }
+  button.ghost:hover { color: var(--ink); border-color: var(--cyan2); }
+  .meta { font-size: 12px; color: var(--dim); margin-top: 8px; }
+  canvas { width: 100%; height: 190px; display: block; margin-top: 12px; border-radius: 10px; background: #0a1128; border: 1px solid var(--line); }
+  /* answer */
+  .verdict { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+  .verdict .big {
+    font-size: 34px; font-weight: 800; letter-spacing: .04em; padding: 6px 18px; border-radius: 14px;
+  }
+  .v-up { color: #07150f; background: linear-gradient(180deg, #46e6a8, #1fae76); }
+  .v-down { color: #1c060c; background: linear-gradient(180deg, #ff7590, #e0304f); }
+  .v-flat { color: #170f02; background: linear-gradient(180deg, #ffd270, #dfa127); }
+  .stat { font-size: 13px; color: var(--dim); }
+  .stat b { color: var(--ink); font-family: var(--mono); }
+  .bars { margin: 10px 0 4px; }
+  .bar-row { display: grid; grid-template-columns: 76px 1fr 52px; align-items: center; gap: 10px; margin: 7px 0; font-size: 13px; }
+  .bar-track { height: 12px; background: #0a1128; border-radius: 999px; overflow: hidden; border: 1px solid var(--line); }
+  .bar-fill { height: 100%; border-radius: 999px; transition: width .5s ease; }
+  .b-up .bar-fill { background: linear-gradient(90deg, #1fae76, #46e6a8); }
+  .b-down .bar-fill { background: linear-gradient(90deg, #e0304f, #ff7590); }
+  .b-flat .bar-fill { background: linear-gradient(90deg, #dfa127, #ffd270); }
+  .grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 10px; }
+  .tile { background: #0c142e; border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+  .tile .k { font-size: 11px; color: var(--dim); letter-spacing: .08em; text-transform: uppercase; }
+  .tile .v { font-size: 19px; font-weight: 700; font-family: var(--mono); margin-top: 4px; }
+  .tile .s { font-size: 11px; color: var(--dim); margin-top: 3px; }
+  .bull .v { color: var(--up); } .bear .v { color: var(--down); } .base .v { color: var(--flat); }
+  .signals { margin-top: 12px; }
+  .sig { display: grid; grid-template-columns: 130px 1fr 70px; gap: 10px; align-items: center; font-size: 12.5px; margin: 6px 0; }
+  .sig .name { color: var(--dim); font-family: var(--mono); }
+  .sig .track { height: 8px; background: #0a1128; border-radius: 999px; position: relative; border: 1px solid var(--line); }
+  .sig .fill { position: absolute; top: 0; bottom: 0; border-radius: 999px; }
+  .sig .fill.bull { left: 50%; background: var(--up); }
+  .sig .fill.bear { right: 50%; background: var(--down); }
+  .sig .reading { text-align: right; }
+  .bull-t { color: var(--up); } .bear-t { color: var(--down); } .neutral-t { color: var(--dim); }
+  .steps { margin: 10px 0 0 2px; }
+  .steps li { margin: 6px 0 6px 16px; color: var(--dim); font-size: 13px; }
+  .warn { margin-top: 10px; font-size: 12.5px; color: var(--flat); }
+  .disclaimer { font-size: 11.5px; color: var(--dim); border-top: 1px dashed var(--line); margin-top: 14px; padding-top: 10px; }
+  .pattern { font-size: 15px; }
+  .pattern b { font-family: var(--mono); font-size: 26px; color: var(--cyan); }
+  #log { display: flex; flex-direction: column; gap: 10px; }
+  .msg { border-radius: 12px; padding: 10px 14px; font-size: 14px; border: 1px solid var(--line); }
+  .msg.user { align-self: flex-end; background: #16327133; max-width: 85%; }
+  .msg.jarvis { align-self: flex-start; background: var(--panel2); max-width: 95%; white-space: pre-wrap; }
+  footer {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 10;
+    background: rgba(10, 15, 30, .92); backdrop-filter: blur(12px);
+    border-top: 1px solid var(--line); padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  }
+  .foot-row { max-width: 860px; margin: 0 auto; display: flex; gap: 10px; align-items: center; }
+  .foot-row input { flex: 1; }
+  a.download { text-decoration: none; }
+  @media (max-width: 640px) {
+    h1 { font-size: 16px; }
+    .verdict .big { font-size: 27px; }
+  }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"></div>
+  <h1>JARVIS<small>prediction engine · “what happens next”</small></h1>
+  <span class="offline"><b>●</b> works offline</span>
+</header>
+
+<main>
+  <!-- DATA -->
+  <section class="card">
+    <h2>1 · DATA</h2>
+    <div class="row">
+      <div class="field" style="max-width:170px">
+        <label for="symbol">Symbol (optional)</label>
+        <input type="text" id="symbol" placeholder="e.g. BTC" maxlength="8">
+      </div>
+      <div class="field" style="max-width:130px">
+        <label for="horizon">Horizon</label>
+        <select id="horizon"><option>1</option><option>2</option><option>3</option><option>5</option></select>
+      </div>
+      <div class="field" style="flex:2; min-width:220px">
+        <label for="series">Price series / numbers — paste, type or load a file</label>
+        <textarea id="series" placeholder="e.g. 101 103 99 105 108 110 109 112" inputmode="decimal"></textarea>
+      </div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="ghost" id="demo">Demo data</button>
+      <button class="ghost" id="clear">Clear</button>
+      <label class="ghost" style="display:inline-block">Load file<input type="file" id="file" class="hidden" accept=".csv,.txt,.tsv,text/*"></label>
+      <span class="meta" id="parsed" style="align-self:center; margin:0 0 0 auto"></span>
+    </div>
+    <canvas id="chart" height="190"></canvas>
+  </section>
+
+  <!-- ACTIONS -->
+  <section class="card">
+    <h2>2 · ASK JARVIS</h2>
+    <div class="chips" id="actions">
+      <span class="chip" data-q="direction">Direction ↑↓</span>
+      <span class="chip" data-q="forecast">Next value</span>
+      <span class="chip" data-q="scenarios">Scenarios</span>
+      <span class="chip" data-q="risk">Risk</span>
+      <span class="chip" data-q="brief">Full brief</span>
+      <span class="chip" data-q="sequence">Sequence puzzle</span>
+      <span class="chip" data-q="odds">Event odds</span>
+    </div>
+    <div class="meta" id="hint">Tip: the series above feeds every question. Sequence puzzle: type numbers like <b>2 4 8 16 32</b> and hit “Sequence puzzle”.</div>
+  </section>
+
+  <!-- ANSWER -->
+  <section class="card hidden" id="answer-card">
+    <h2>3 · JARVIS SAYS</h2>
+    <div id="answer"></div>
+  </section>
+
+  <section class="card">
+    <h2>SESSION</h2>
+    <div id="log"></div>
+  </section>
+</main>
+
+<footer>
+  <div class="foot-row">
+    <input type="text" id="ask" placeholder="Ask anything predictive… e.g. “will it go up or down” / “next number in 2 4 8 16”" autocomplete="off">
+    <button class="primary" id="send">Ask</button>
+    <a class="download" href="jarvis-app.html" download="jarvis-app.html"><button class="ghost" id="dl" title="Download the whole app as one offline file">⤓ App</button></a>
+  </div>
+</footer>
+
+<script src="engine.js"></script>
+<script>
+'use strict';
+const E = window.JarvisEngine;
+const $ = (id) => document.getElementById(id);
+const seriesEl = $('series'), symbolEl = $('symbol'), horizonEl = $('horizon');
+
+/* ---------------- state ---------------- */
+function getState() {
+  const nums = (seriesEl.value.match(/-?\d+(\.\d+)?/g) || []).map(Number);
+  return { series: nums, symbol: symbolEl.value.trim().toUpperCase() || null, horizon: +horizonEl.value };
+}
+function persist() {
+  try { localStorage.setItem('jarvis', JSON.stringify({ s: seriesEl.value, y: symbolEl.value, h: horizonEl.value })); } catch (e) {}
+}
+function restore() {
+  try {
+    const d = JSON.parse(localStorage.getItem('jarvis') || 'null');
+    if (d) { seriesEl.value = d.s || ''; symbolEl.value = d.y || ''; horizonEl.value = d.h || '1'; }
+  } catch (e) {}
+}
+
+/* ---------------- chart ---------------- */
+function drawChart(series, forecast) {
+  const cv = $('chart'), ctx = cv.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const W = cv.clientWidth, H = 190;
+  cv.width = W * dpr; cv.height = H * dpr; ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, W, H);
+  if (!series || series.length < 2) {
+    ctx.fillStyle = '#8b96c9'; ctx.font = '13px ui-monospace, monospace'; ctx.textAlign = 'center';
+    ctx.fillText('no data — paste numbers above', W / 2, H / 2);
+    return;
+  }
+  const view = series.slice(-60);
+  const extra = forecast ? forecast.path.length : 0;
+  const vals = view.concat(forecast ? forecast.path : []);
+  const lo = Math.min(...vals), hi = Math.max(...vals);
+  const pad = (hi - lo) * 0.12 || 1;
+  const y = (v) => H - 22 - ((v - (lo - pad)) / ((hi + pad) - (lo - pad))) * (H - 40);
+  const x = (i) => 14 + (i / (view.length - 1 + extra)) * (W - 28);
+
+  // grid
+  ctx.strokeStyle = '#1d2a55'; ctx.lineWidth = 1; ctx.font = '10px ui-monospace, monospace';
+  for (let g = 0; g <= 3; g++) {
+    const gy = 18 + g * ((H - 40) / 3);
+    ctx.beginPath(); ctx.moveTo(10, gy); ctx.lineTo(W - 10, gy); ctx.globalAlpha = .35; ctx.stroke(); ctx.globalAlpha = 1;
+    const val = (hi + pad) - g * (((hi + pad) - (lo - pad)) / 3);
+    ctx.fillStyle = '#5a6699'; ctx.textAlign = 'left';
+    ctx.fillText(fmt(val), 12, gy - 4);
+  }
+  // CI band around forecast path
+  if (forecast) {
+    const p = forecast.path[forecast.path.length - 1];
+    const [lo80] = forecast.interval80; const hi80 = forecast.interval80[1];
+    const x0 = x(view.length - 1), x1 = x(view.length - 1 + extra);
+    ctx.fillStyle = 'rgba(76,195,255,.14)';
+    ctx.fillRect(Math.min(x0, x1), y(hi80), Math.abs(x1 - x0) || 8, Math.abs(y(lo80) - y(hi80)));
+  }
+  // series line
+  ctx.strokeStyle = '#4cc3ff'; ctx.lineWidth = 2; ctx.beginPath();
+  view.forEach((v, i) => (i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v))));
+  ctx.stroke();
+  // forecast dotted
+  if (forecast) {
+    ctx.strokeStyle = '#9fe6ff'; ctx.setLineDash([4, 4]); ctx.lineWidth = 2; ctx.beginPath();
+    ctx.moveTo(x(view.length - 1), y(view[view.length - 1]));
+    forecast.path.forEach((v, i) => ctx.lineTo(x(view.length - 1 + 1 + i), y(v)));
+    ctx.stroke(); ctx.setLineDash([]);
+    const lastP = forecast.path[forecast.path.length - 1];
+    ctx.fillStyle = '#9fe6ff'; ctx.beginPath();
+    ctx.arc(x(view.length - 1 + extra), y(lastP), 4.5, 0, 7); ctx.fill();
+    ctx.fillStyle = '#cfeeff'; ctx.font = '11px ui-monospace, monospace'; ctx.textAlign = 'right';
+    ctx.fillText(fmt(lastP), W - 12, y(lastP) - 9);
+  }
+  // last value dot
+  ctx.fillStyle = '#4cc3ff'; ctx.beginPath();
+  ctx.arc(x(view.length - 1), y(view[view.length - 1]), 3.5, 0, 7); ctx.fill();
+}
+const fmt = (v) => (Math.abs(v) >= 1000 ? v.toFixed(0) : Math.abs(v) >= 10 ? v.toFixed(1) : v.toPrecision(4));
+
+/* ---------------- rendering ---------------- */
+function bar(cls, label, pct) {
+  return `<div class="bar-row ${cls}"><span>${label}</span>
+    <div class="bar-track"><div class="bar-fill" style="width:${Math.round(pct * 100)}%"></div></div>
+    <span style="text-align:right;font-family:var(--mono)">${(pct * 100).toFixed(0)}%</span></div>`;
+}
+function pctBar(cls, label, p) { return bar(cls, label, p); }
+function signalsHtml(signals) {
+  return `<div class="signals">` + signals.map((s) => {
+    const w = Math.min(Math.abs(s.value), 1) * 50;
+    const cls = s.value >= 0 ? 'bull' : 'bear';
+    const rc = s.reading === 'bullish' ? 'bull-t' : s.reading === 'bearish' ? 'bear-t' : 'neutral-t';
+    return `<div class="sig"><span class="name">${s.name}</span>
+      <div class="track"><div class="fill ${cls}" style="${s.value >= 0 ? 'left:50%' : 'right:50%'};width:${w}%"></div>
+      <div style="position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:#2a3a6e"></div></div>
+      <span class="reading ${rc}">${s.reading}</span></div>`;
+  }).join('') + `</div>`;
+}
+function disclaimerHtml(extra) {
+  return `<div class="disclaimer">◆ ${E.DISCLAIMER}${extra || ''}</div>`;
+}
+function render(result, series) {
+  const box = $('answer');
+  $('answer-card').classList.remove('hidden');
+  if (result.error) { box.innerHTML = `<div class="warn">${result.error}</div>`; return; }
+  switch (result.kind) {
+    case 'direction': {
+      const p = result.probabilities;
+      const vc = result.verdict === 'UP' ? 'v-up' : result.verdict === 'DOWN' ? 'v-down' : 'v-flat';
+      const lv = ['up', 'down', 'sideways'];
+      box.innerHTML = `
+        <div class="verdict"><span class="big ${vc}">${result.verdict}</span>
+          <div class="stat"><b>${result.symbol}</b> at <b>${fmt(result.lastValue)}</b> · expected move
+          <b>${result.expectedMovePct > 0 ? '+' : ''}${result.expectedMovePct}%</b> · confidence <b>${(result.confidence * 100).toFixed(0)}%</b>
+          <br>${result.dataPoints} points · vol/period ${(result.volatilityPerPeriod * 100).toFixed(2)}%</div></div>
+        <div class="bars">${bar('b-up', 'Up', p.up)}${bar('b-down', 'Down', p.down)}${bar('b-flat', 'Sideways', p.sideways)}</div>
+        ${signalsHtml(result.signals)}
+        ${(result.support != null || result.resistance != null) ? `<div class="meta">Levels — support <b>${result.support != null ? fmt(result.support) : '—'}</b> · resistance <b>${result.resistance != null ? fmt(result.resistance) : '—'}</b></div>` : ''}
+        ${disclaimerHtml()}`;
+      drawChart(series);
+      break;
+    }
+    case 'forecast': {
+      box.innerHTML = `
+        <div class="verdict"><span class="big v-up" style="background:linear-gradient(180deg,#8bd8ff,#2196f3);color:#04101f">NEXT ${fmt(result.nextValue)}</span>
+          <div class="stat">trend <b>${result.trend}</b> (R² ${result.trendR2}) · horizon <b>${result.horizon}</b> · confidence <b>${(result.confidence * 100).toFixed(0)}%</b><br>
+          80% <b>[${fmt(result.interval80[0])}, ${fmt(result.interval80[1])}]</b> · 95% <b>[${fmt(result.interval95[0])}, ${fmt(result.interval95[1])}]</b></div></div>
+        <div class="bars">${Object.entries(result.engineWeights).map(([k, v]) => bar('b-flat', k.replace('_', ' '), v)).join('')}</div>
+        ${result.disclaimer ? disclaimerHtml() : ''}`;
+      drawChart(series, result);
+      break;
+    }
+    case 'sequence': {
+      box.innerHTML = `
+        <div class="verdict"><span class="big v-up" style="background:linear-gradient(180deg,#8bd8ff,#2196f3);color:#04101f">${+result.nextValue}</span>
+          <div class="stat">pattern <b>${result.pattern.replace(/_/g, ' ')}</b> · confidence <b>${(result.confidence * 100).toFixed(0)}%</b></div></div>
+        <div class="pattern">${result.detail || ''}</div>
+        <div class="meta">series: ${result.sequence.map((v) => +v).join(', ')}, <b style="color:var(--cyan)">?</b></div>`;
+      drawChart(series);
+      break;
+    }
+    case 'scenarios': {
+      const icon = { bull: '▲', base: '▬', bear: '▼' };
+      box.innerHTML = `<div class="grid3">` + result.scenarios.map((s) => `
+        <div class="tile ${s.name}"><div class="k">${icon[s.name]} ${s.name}</div>
+        <div class="v">${fmt(s.target)}</div>
+        <div class="s">${s.changePct > 0 ? '+' : ''}${s.changePct}% · p=${(s.probability * 100).toFixed(0)}%</div></div>`).join('') +
+        `</div><div class="meta">last <b>${fmt(result.lastValue)}</b> · confidence <b>${(result.confidence * 100).toFixed(0)}%</b></div>${disclaimerHtml()}`;
+      drawChart(series);
+      break;
+    }
+    case 'risk': {
+      const color = { low: 'var(--up)', medium: 'var(--flat)', high: '#ff8a5c', extreme: 'var(--down)' }[result.riskLabel];
+      box.innerHTML = `
+        <div class="verdict"><span class="big" style="background:#0c142e;border:1px solid var(--line);color:${color}">${result.riskLabel.toUpperCase()}</span>
+          <div class="stat">risk score <b>${result.riskScore}/10</b> · regime <b>${result.volatilityRegime}</b> · trend R² <b>${result.trendStabilityR2}</b></div></div>
+        <div class="bars">${bar('b-flat', 'risk', result.riskScore / 10)}</div>
+        <div class="grid3">
+          <div class="tile"><div class="k">vol / period</div><div class="v">${(result.volatilityPerPeriod * 100).toFixed(2)}%</div></div>
+          <div class="tile"><div class="k">annualised vol</div><div class="v">${result.annualizedVolatilityPct}%</div><div class="s">daily bars</div></div>
+          <div class="tile"><div class="k">max drawdown</div><div class="v">${result.maxDrawdownPct}%</div></div>
+          <div class="tile"><div class="k">VaR 95%</div><div class="v">${result.historicalVar95Pct}%</div><div class="s">per period</div></div>
+        </div>
+        ${result.warnings ? `<div class="warn">⚠ ${result.warnings.join(' ')}</div>` : ''}
+        ${disclaimerHtml()}`;
+      drawChart(series);
+      break;
+    }
+    case 'event_probability': {
+      box.innerHTML = `
+        <div class="verdict"><span class="big v-up" style="background:linear-gradient(180deg,#8bd8ff,#2196f3);color:#04101f">${(result.probability * 100).toFixed(1)}%</span>
+          <div class="stat">${result.mode === 'frequency' ? 'Laplace-smoothed frequency' : 'base rate + evidence'}
+          · confidence <b>${(result.confidence * 100).toFixed(0)}%</b></div></div>
+        ${result.interval95 ? `<div class="bars">${bar('b-flat', '95% range', result.probability)}
+          <div class="meta">interval <b>[${(result.interval95[0] * 100).toFixed(1)}%, ${(result.interval95[1] * 100).toFixed(1)}%]</b></div></div>` : ''}
+        <ul class="steps">${(result.reasoning || []).map((s) => `<li>${s}</li>`).join('')}</ul>`;
+      drawChart(null);
+      break;
+    }
+    case 'market_brief': {
+      const d = result.direction, p = d.probabilities;
+      const vc = d.verdict === 'UP' ? 'v-up' : d.verdict === 'DOWN' ? 'v-down' : 'v-flat';
+      box.innerHTML = `
+        <div class="verdict"><span class="big ${vc}">${d.verdict}</span>
+          <div class="stat"><b>${result.symbol}</b> at <b>${fmt(d.lastValue)}</b> · confidence <b>${(d.confidence * 100).toFixed(0)}%</b>
+          ${result.indicators.rsi != null ? `· RSI <b>${result.indicators.rsi.toFixed(1)}</b>` : ''}</div></div>
+        <div class="bars">${bar('b-up', 'Up', p.up)}${bar('b-down', 'Down', p.down)}${bar('b-flat', 'Sideways', p.sideways)}</div>
+        ${signalsHtml(d.signals)}
+        <div class="grid3">` + result.scenarios.map((s) => `
+          <div class="tile ${s.name}"><div class="k">${s.name}</div><div class="v">${fmt(s.target)}</div>
+          <div class="s">${s.changePct > 0 ? '+' : ''}${s.changePct}% · p=${(s.probability * 100).toFixed(0)}%</div></div>`).join('') + `
+        </div>
+        <div class="meta">risk <b>${result.risk.riskLabel}</b> (${result.risk.riskScore}/10) · VaR95 <b>${result.risk.historicalVar95Pct}%</b> · max DD <b>${result.risk.maxDrawdownPct}%</b></div>
+        ${disclaimerHtml()}`;
+      drawChart(series);
+      break;
+    }
+    default: box.innerHTML = `<pre style="font-size:12px;white-space:pre-wrap">${JSON.stringify(result, null, 1)}</pre>`;
+  }
+  $('answer-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+/* ---------------- routing (mirrors the console) ---------------- */
+function route(question) {
+  const low = question.toLowerCase();
+  const st = getState();
+
+  // event odds
+  if (/\b(odds|probab|chance|likel)/.test(low)) {
+    const m = low.match(/(\d+)\s*(?:\/|out of|of|in)\s*(\d+)/);
+    if (m && +m[2] > 0 && +m[1] <= +m[2]) return E.eventProbability({ successes: +m[1], trials: +m[2] });
+    const b = low.match(/base(?:\s*rate)?\s*([0-9]*\.?[0-9]+)\s*%?/);
+    if (b) {
+      let pct = +b[1]; const base = pct > 1 ? pct / 100 : pct;
+      const evidence = [];
+      const strengths = { strong: 0.9, solid: 0.7, moderate: 0.5, weak: 0.3, slight: 0.2 };
+      low.split(/,| and (?=strong|solid|moderate|weak|slight)/).forEach((chunk) => {
+        const direction = /against|oppos|negative/.test(chunk) ? 'against' : 'for';
+        let strength = 0.5;
+        for (const [w, v] of Object.entries(strengths)) if (chunk.includes(w)) { strength = v; break; }
+        if (/evidence|argument|signal|sign of/.test(chunk) || Object.keys(strengths).some((w) => chunk.includes(w)))
+          evidence.push({ direction, strength });
+      });
+      return E.eventProbability({ baseRate: base, evidence });
+    }
+    return { kind: 'event_probability', mode: 'hint', probability: null,
+      error: 'For odds, give Jarvis numbers: “odds 7 of 10” (observed frequency) or “odds base 30% strong evidence for”.' };
+  }
+
+  // sequence
+  const wantsSeq = /next (number|term|value|digit)|sequence|pattern/.test(low);
+  if (wantsSeq && st.series.length >= 3) return E.predictSequence(st.series);
+
+  // which market analysis?
+  const wantsDir = /direction|up or down|will it|go up|go down|rise|fall|drop|rally|trend|market|trade|tomorrow|next bar|next candle|what will /.test(low) || low === 'direction';
+  const wantsScen = /scenario|bull|bear/.test(low);
+  const wantsRisk = /risk|volatil|drawdown|var\b/.test(low);
+  const wantsBrief = /brief|everything|full/.test(low);
+
+  if (st.series.length >= 3) {
+    if (wantsBrief) return E.analyzeMarket(st.series, st.symbol);
+    if (wantsScen) return E.scenarios(st.series, st.symbol);
+    if (wantsRisk) return E.assessRisk(st.series, st.symbol);
+    if (wantsDir) return E.predictDirection(st.series, st.symbol);
+    return E.forecastSeries(st.series, st.horizon);
+  }
+  return { error: 'Jarvis needs numbers first, sir — paste a series in the DATA panel (3+ values).' };
+}
+
+/* ---------------- chat glue ---------------- */
+function logMsg(cls, text) {
+  const div = document.createElement('div');
+  div.className = `msg ${cls}`; div.textContent = text;
+  $('log').appendChild(div);
+  while ($('log').children.length > 12) $('log').removeChild($('log').firstChild);
+}
+function ask(question) {
+  question = question.trim();
+  if (!question) return;
+  logMsg('user', question);
+  let result;
+  try { result = route(question); }
+  catch (e) { result = { error: 'engine error: ' + e.message }; }
+  if (result.error) { logMsg('jarvis', result.error); render(result, []); return; }
+  render(result, getState().series);
+  const summary = summarize(result);
+  if (summary) logMsg('jarvis', summary);
+}
+function summarize(r) {
+  switch (r.kind) {
+    case 'direction': return `${r.verdict} — up ${(r.probabilities.up * 100).toFixed(0)}% / down ${(r.probabilities.down * 100).toFixed(0)}% (confidence ${(r.confidence * 100).toFixed(0)}%)`;
+    case 'forecast': return `next value ${fmt(r.nextValue)}, 80% range [${fmt(r.interval80[0])} … ${fmt(r.interval80[1])}]`;
+    case 'sequence': return `pattern: ${r.pattern.replace(/_/g, ' ')} → next term ${+r.nextValue}`;
+    case 'scenarios': return r.scenarios.map((s) => `${s.name} ${fmt(s.target)} (${(s.probability * 100).toFixed(0)}%)`).join(' · ');
+    case 'risk': return `risk ${r.riskLabel.toUpperCase()} ${r.riskScore}/10 · VaR95 ${r.historicalVar95Pct}% · DD ${r.maxDrawdownPct}%`;
+    case 'event_probability': return `probability ${(r.probability * 100).toFixed(1)}%`;
+    case 'market_brief': return `brief: ${r.direction.verdict} · risk ${r.risk.riskLabel}`;
+    default: return null;
+  }
+}
+
+/* ---------------- events ---------------- */
+const DEMOS = {
+  market: [100.2, 101.1, 99.8, 100.9, 101.7, 102.4, 101.9, 102.8, 103.5, 103.1, 104.2, 105.0],
+  crypto: [44000, 44500, 44100, 45200, 45800, 45400, 46100, 46700],
+  seq: [2, 4, 8, 16, 32],
+};
+$('demo').addEventListener('click', () => {
+  const keys = Object.keys(DEMOS);
+  demoIdx = (demoIdx + 1) % keys.length;
+  const k = keys[demoIdx];
+  seriesEl.value = DEMOS[k].join(' ');
+  symbolEl.value = k === 'crypto' ? 'BTC' : k === 'market' ? 'DEMO' : '';
+  refresh();
+  logMsg('jarvis', `loaded ${k} demo (${DEMOS[k].length} points) — now ask me something`);
+});
+let demoIdx = -1;
+$('clear').addEventListener('click', () => { seriesEl.value = ''; symbolEl.value = ''; refresh(); persist(); });
+$('file').addEventListener('change', (ev) => {
+  const f = ev.target.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    const nums = (String(rd.result).match(/-?\d+(\.\d+)?/g) || []).map(Number);
+    if (nums.length < 3) { logMsg('jarvis', 'that file has fewer than 3 numbers, sir'); return; }
+    seriesEl.value = nums.join(' ');
+    if (!symbolEl.value) symbolEl.value = f.name.replace(/\.[^.]+$/, '').toUpperCase().slice(0, 8);
+    refresh(); persist();
+    logMsg('jarvis', `loaded ${nums.length} points from ${f.name} — ask away`);
+  };
+  rd.readAsText(f);
+});
+[seriesEl, symbolEl].forEach((el) => el.addEventListener('input', () => { refresh(); persist(); }));
+horizonEl.addEventListener('change', persist);
+function refresh() {
+  const st = getState();
+  $('parsed').innerHTML = st.series.length >= 3
+    ? `<b>${st.series.length}</b> points parsed${st.symbol ? ` · <b>${st.symbol}</b>` : ''}`
+    : (st.series.length ? `<b>${st.series.length}</b> points — need at least 3` : '');
+  drawChart(st.series.length >= 2 ? st.series : null);
+}
+$('actions').addEventListener('click', (ev) => {
+  const chip = ev.target.closest('.chip'); if (!chip) return;
+  document.querySelectorAll('.chip').forEach((c) => c.classList.remove('active'));
+  chip.classList.add('active');
+  ask(chip.dataset.q);
+});
+$('send').addEventListener('click', () => { ask($('ask').value); $('ask').value = ''; });
+$('ask').addEventListener('keydown', (e) => { if (e.key === 'Enter') { ask($('ask').value); $('ask').value = ''; } });
+
+/* PWA service worker (only meaningful when hosted over http(s)) */
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
+restore(); refresh();
+</script>
+</body>
+</html>

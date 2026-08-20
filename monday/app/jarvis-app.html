@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0f1e">
+<title>JARVIS — prediction engine</title>
+
+<style>
+  :root {
+    --bg: #0a0f1e; --panel: #101733; --panel2: #0d1328; --line: #1d2a55;
+    --ink: #e8edff; --dim: #8b96c9; --cyan: #4cc3ff; --cyan2: #2196f3;
+    --up: #2ecc8f; --down: #ff5c7a; --flat: #f4b63f; --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: radial-gradient(1200px 500px at 50% -10%, #14224d 0%, var(--bg) 60%);
+    color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+    min-height: 100vh; padding-bottom: 96px;
+  }
+  header {
+    position: sticky; top: 0; z-index: 10; backdrop-filter: blur(12px);
+    background: rgba(10, 15, 30, .82); border-bottom: 1px solid var(--line);
+    padding: 14px 18px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  }
+  .logo {
+    width: 38px; height: 38px; border-radius: 50%; flex: none;
+    background: radial-gradient(circle at 50% 45%, #9fe6ff 0%, #2196f3 45%, #0b1c3d 100%);
+    box-shadow: 0 0 18px rgba(76, 195, 255, .55), inset 0 0 8px rgba(255,255,255,.35);
+    position: relative;
+  }
+  .logo::after {
+    content: ""; position: absolute; inset: 9px; border-radius: 50%;
+    border: 2px solid rgba(10, 20, 45, .8); border-top-color: transparent; transform: rotate(40deg);
+  }
+  h1 { font-size: 19px; letter-spacing: .16em; font-weight: 700; }
+  h1 small { display: block; font-size: 11px; letter-spacing: .06em; color: var(--dim); font-weight: 500; margin-top: 2px; }
+  .offline { margin-left: auto; font-size: 11px; color: var(--dim); border: 1px solid var(--line); padding: 4px 10px; border-radius: 999px; }
+  .offline b { color: var(--up); font-weight: 600; }
+  main { max-width: 860px; margin: 0 auto; padding: 18px 14px 0; }
+  .card {
+    background: linear-gradient(180deg, var(--panel) 0%, var(--panel2) 100%);
+    border: 1px solid var(--line); border-radius: 16px; padding: 16px; margin-bottom: 14px;
+  }
+  .card h2 { font-size: 12px; letter-spacing: .18em; color: var(--dim); font-weight: 600; margin-bottom: 12px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  input[type=text], textarea, select {
+    background: #0a1128; color: var(--ink); border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px 12px; font-size: 15px; font-family: inherit; outline: none; width: 100%;
+  }
+  input:focus, textarea:focus { border-color: var(--cyan2); box-shadow: 0 0 0 3px rgba(33,150,243,.18); }
+  textarea { font-family: var(--mono); font-size: 14px; min-height: 74px; resize: vertical; }
+  .field { flex: 1; min-width: 130px; }
+  .field label { display: block; font-size: 11px; color: var(--dim); margin: 0 2px 5px; letter-spacing: .06em; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip {
+    border: 1px solid var(--line); background: #0c142e; color: var(--ink);
+    padding: 9px 14px; border-radius: 999px; font-size: 14px; cursor: pointer; user-select: none;
+    transition: all .15s ease;
+  }
+  .chip:hover { border-color: var(--cyan2); }
+  .chip.active { background: linear-gradient(180deg, #2b6fd6, #1c4fa8); border-color: #4c8fe8; box-shadow: 0 2px 12px rgba(33,150,243,.35); }
+  button.primary {
+    background: linear-gradient(180deg, #35c7ff, #1a7fe0); border: none; color: #04101f;
+    font-weight: 700; font-size: 15px; border-radius: 12px; padding: 12px 20px; cursor: pointer;
+    box-shadow: 0 4px 18px rgba(53, 199, 255, .35);
+  }
+  button.primary:active { transform: translateY(1px); }
+  button.ghost {
+    background: transparent; border: 1px solid var(--line); color: var(--dim);
+    border-radius: 10px; padding: 9px 14px; font-size: 13px; cursor: pointer;
+  }
+  button.ghost:hover { color: var(--ink); border-color: var(--cyan2); }
+  .meta { font-size: 12px; color: var(--dim); margin-top: 8px; }
+  canvas { width: 100%; height: 190px; display: block; margin-top: 12px; border-radius: 10px; background: #0a1128; border: 1px solid var(--line); }
+  /* answer */
+  .verdict { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+  .verdict .big {
+    font-size: 34px; font-weight: 800; letter-spacing: .04em; padding: 6px 18px; border-radius: 14px;
+  }
+  .v-up { color: #07150f; background: linear-gradient(180deg, #46e6a8, #1fae76); }
+  .v-down { color: #1c060c; background: linear-gradient(180deg, #ff7590, #e0304f); }
+  .v-flat { color: #170f02; background: linear-gradient(180deg, #ffd270, #dfa127); }
+  .stat { font-size: 13px; color: var(--dim); }
+  .stat b { color: var(--ink); font-family: var(--mono); }
+  .bars { margin: 10px 0 4px; }
+  .bar-row { display: grid; grid-template-columns: 76px 1fr 52px; align-items: center; gap: 10px; margin: 7px 0; font-size: 13px; }
+  .bar-track { height: 12px; background: #0a1128; border-radius: 999px; overflow: hidden; border: 1px solid var(--line); }
+  .bar-fill { height: 100%; border-radius: 999px; transition: width .5s ease; }
+  .b-up .bar-fill { background: linear-gradient(90deg, #1fae76, #46e6a8); }
+  .b-down .bar-fill { background: linear-gradient(90deg, #e0304f, #ff7590); }
+  .b-flat .bar-fill { background: linear-gradient(90deg, #dfa127, #ffd270); }
+  .grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 10px; }
+  .tile { background: #0c142e; border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+  .tile .k { font-size: 11px; color: var(--dim); letter-spacing: .08em; text-transform: uppercase; }
+  .tile .v { font-size: 19px; font-weight: 700; font-family: var(--mono); margin-top: 4px; }
+  .tile .s { font-size: 11px; color: var(--dim); margin-top: 3px; }
+  .bull .v { color: var(--up); } .bear .v { color: var(--down); } .base .v { color: var(--flat); }
+  .signals { margin-top: 12px; }
+  .sig { display: grid; grid-template-columns: 130px 1fr 70px; gap: 10px; align-items: center; font-size: 12.5px; margin: 6px 0; }
+  .sig .name { color: var(--dim); font-family: var(--mono); }
+  .sig .track { height: 8px; background: #0a1128; border-radius: 999px; position: relative; border: 1px solid var(--line); }
+  .sig .fill { position: absolute; top: 0; bottom: 0; border-radius: 999px; }
+  .sig .fill.bull { left: 50%; background: var(--up); }
+  .sig .fill.bear { right: 50%; background: var(--down); }
+  .sig .reading { text-align: right; }
+  .bull-t { color: var(--up); } .bear-t { color: var(--down); } .neutral-t { color: var(--dim); }
+  .steps { margin: 10px 0 0 2px; }
+  .steps li { margin: 6px 0 6px 16px; color: var(--dim); font-size: 13px; }
+  .warn { margin-top: 10px; font-size: 12.5px; color: var(--flat); }
+  .disclaimer { font-size: 11.5px; color: var(--dim); border-top: 1px dashed var(--line); margin-top: 14px; padding-top: 10px; }
+  .pattern { font-size: 15px; }
+  .pattern b { font-family: var(--mono); font-size: 26px; color: var(--cyan); }
+  #log { display: flex; flex-direction: column; gap: 10px; }
+  .msg { border-radius: 12px; padding: 10px 14px; font-size: 14px; border: 1px solid var(--line); }
+  .msg.user { align-self: flex-end; background: #16327133; max-width: 85%; }
+  .msg.jarvis { align-self: flex-start; background: var(--panel2); max-width: 95%; white-space: pre-wrap; }
+  footer {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 10;
+    background: rgba(10, 15, 30, .92); backdrop-filter: blur(12px);
+    border-top: 1px solid var(--line); padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  }
+  .foot-row { max-width: 860px; margin: 0 auto; display: flex; gap: 10px; align-items: center; }
+  .foot-row input { flex: 1; }
+  a.download { text-decoration: none; }
+  @media (max-width: 640px) {
+    h1 { font-size: 16px; }
+    .verdict .big { font-size: 27px; }
+  }
+  .hidden { display: none; }
+</style>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMjggMTI4Ij4KICA8ZGVmcz4KICAgIDxyYWRpYWxHcmFkaWVudCBpZD0iY29yZSIgY3g9IjUwJSIgY3k9IjQ1JSIgcj0iNTUlIj4KICAgICAgPHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzlmZTZmZiIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjQ1JSIgc3RvcC1jb2xvcj0iIzIxOTZmMyIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiMwYjFjM2QiLz4KICAgIDwvcmFkaWFsR3JhZGllbnQ+CiAgPC9kZWZzPgogIDxyZWN0IHdpZHRoPSIxMjgiIGhlaWdodD0iMTI4IiByeD0iMjgiIGZpbGw9IiMwYTBmMWUiLz4KICA8Y2lyY2xlIGN4PSI2NCIgY3k9IjY0IiByPSI0MCIgZmlsbD0idXJsKCNjb3JlKSIvPgogIDxjaXJjbGUgY3g9IjY0IiBjeT0iNjQiIHI9IjQwIiBmaWxsPSJub25lIiBzdHJva2U9IiM0Y2MzZmYiIHN0cm9rZS1vcGFjaXR5PSIuNSIgc3Ryb2tlLXdpZHRoPSIyIi8+CiAgPHBhdGggZD0iTTY0IDMwIGEzNCAzNCAwIDAgMSAyOSA1MSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjY2ZlZWZmIiBzdHJva2Utd2lkdGg9IjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgb3BhY2l0eT0iLjkiLz4KICA8cGF0aCBkPSJNNjQgOTggYTM0IDM0IDAgMCAxIC0yOSAtNTEiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzRjYzNmZiIgc3Ryb2tlLXdpZHRoPSI1IiBzdHJva2UtbGluZWNhcD0icm91bmQiIG9wYWNpdHk9Ii43Ii8+CiAgPGNpcmNsZSBjeD0iNjQiIGN5PSI2NCIgcj0iMTAiIGZpbGw9IiNlOGY3ZmYiLz4KPC9zdmc+Cg==">
+</head>
+<body>
+<header>
+  <div class="logo"></div>
+  <h1>JARVIS<small>prediction engine · “what happens next”</small></h1>
+  <span class="offline"><b>●</b> works offline</span>
+</header>
+
+<main>
+  <!-- DATA -->
+  <section class="card">
+    <h2>1 · DATA</h2>
+    <div class="row">
+      <div class="field" style="max-width:170px">
+        <label for="symbol">Symbol (optional)</label>
+        <input type="text" id="symbol" placeholder="e.g. BTC" maxlength="8">
+      </div>
+      <div class="field" style="max-width:130px">
+        <label for="horizon">Horizon</label>
+        <select id="horizon"><option>1</option><option>2</option><option>3</option><option>5</option></select>
+      </div>
+      <div class="field" style="flex:2; min-width:220px">
+        <label for="series">Price series / numbers — paste, type or load a file</label>
+        <textarea id="series" placeholder="e.g. 101 103 99 105 108 110 109 112" inputmode="decimal"></textarea>
+      </div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="ghost" id="demo">Demo data</button>
+      <button class="ghost" id="clear">Clear</button>
+      <label class="ghost" style="display:inline-block">Load file<input type="file" id="file" class="hidden" accept=".csv,.txt,.tsv,text/*"></label>
+      <span class="meta" id="parsed" style="align-self:center; margin:0 0 0 auto"></span>
+    </div>
+    <canvas id="chart" height="190"></canvas>
+  </section>
+
+  <!-- ACTIONS -->
+  <section class="card">
+    <h2>2 · ASK JARVIS</h2>
+    <div class="chips" id="actions">
+      <span class="chip" data-q="direction">Direction ↑↓</span>
+      <span class="chip" data-q="forecast">Next value</span>
+      <span class="chip" data-q="scenarios">Scenarios</span>
+      <span class="chip" data-q="risk">Risk</span>
+      <span class="chip" data-q="brief">Full brief</span>
+      <span class="chip" data-q="sequence">Sequence puzzle</span>
+      <span class="chip" data-q="odds">Event odds</span>
+    </div>
+    <div class="meta" id="hint">Tip: the series above feeds every question. Sequence puzzle: type numbers like <b>2 4 8 16 32</b> and hit “Sequence puzzle”.</div>
+  </section>
+
+  <!-- ANSWER -->
+  <section class="card hidden" id="answer-card">
+    <h2>3 · JARVIS SAYS</h2>
+    <div id="answer"></div>
+  </section>
+
+  <section class="card">
+    <h2>SESSION</h2>
+    <div id="log"></div>
+  </section>
+</main>
+
+<footer>
+  <div class="foot-row">
+    <input type="text" id="ask" placeholder="Ask anything predictive… e.g. “will it go up or down” / “next number in 2 4 8 16”" autocomplete="off">
+    <button class="primary" id="send">Ask</button>
+    <a class="download" href="#" onclick="return false" title="You are already running the standalone app — save this page (Ctrl/Cmd-S) to keep it"><button class="ghost" id="dl" title="Download the whole app as one offline file">⤓ App</button></a>
+  </div>
+</footer>
+
+<script>
+/*
+ * Jarvis prediction engine — JavaScript port of monday/agents/prediction_agent.py
+ * Pure functions, no dependencies. Attaches window.JarvisEngine (or module.exports).
+ */
+(function (root, factory) {
+  if (typeof module !== 'undefined' && module.exports) module.exports = factory();
+  else root.JarvisEngine = factory();
+})(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+
+  const DISCLAIMER =
+    'Statistical estimate from transparent rule-based models on the data provided. ' +
+    'Not financial advice; markets can and do defy any model.';
+
+  // ---------------------------------------------------------------- math
+  const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+  const logistic = (x) => 1 / (1 + Math.exp(-x));
+  const mean = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
+  function stdev(xs) {
+    if (xs.length < 2) return 0;
+    const m = mean(xs);
+    return Math.sqrt(xs.reduce((a, b) => a + (b - m) * (b - m), 0) / (xs.length - 1));
+  }
+  function sma(values, window) {
+    return values.map((_, i) =>
+      i + 1 < window ? null : mean(values.slice(i + 1 - window, i + 1))
+    );
+  }
+  function ema(values, span) {
+    if (!values.length) return [];
+    const alpha = 2 / (span + 1);
+    const out = [values[0]];
+    for (let i = 1; i < values.length; i++) out.push(alpha * values[i] + (1 - alpha) * out[i - 1]);
+    return out;
+  }
+  function returns(values) {
+    const out = [];
+    for (let i = 1; i < values.length; i++) if (values[i - 1] !== 0) out.push((values[i] - values[i - 1]) / values[i - 1]);
+    return out;
+  }
+  function ols(xs, ys) {
+    const n = xs.length;
+    if (n < 2) return { slope: 0, intercept: ys[0] || 0, r2: 0 };
+    const mx = mean(xs), my = mean(ys);
+    let sxx = 0, sxy = 0;
+    for (let i = 0; i < n; i++) { sxx += (xs[i] - mx) ** 2; sxy += (xs[i] - mx) * (ys[i] - my); }
+    if (sxx === 0) return { slope: 0, intercept: my, r2: 0 };
+    const slope = sxy / sxx, intercept = my - slope * mx;
+    let ssTot = 0, ssRes = 0;
+    for (let i = 0; i < n; i++) {
+      ssTot += (ys[i] - my) ** 2;
+      ssRes += (ys[i] - (slope * xs[i] + intercept)) ** 2;
+    }
+    const r2 = ssTot > 0 ? 1 - ssRes / ssTot : 0;
+    return { slope, intercept, r2 };
+  }
+  function percentile(sorted, p) {
+    if (!sorted.length) return 0;
+    if (sorted.length === 1) return sorted[0];
+    const k = (sorted.length - 1) * p, f = Math.floor(k), c = Math.min(f + 1, sorted.length - 1);
+    return f === c ? sorted[k] : sorted[f] + (sorted[c] - sorted[f]) * (k - f);
+  }
+  function solveLinearSystem(a, b) {
+    const n = b.length;
+    const m = a.map((row, i) => row.slice().concat([b[i]]));
+    for (let col = 0; col < n; col++) {
+      let pivot = col;
+      for (let r = col + 1; r < n; r++) if (Math.abs(m[r][col]) > Math.abs(m[pivot][col])) pivot = r;
+      if (Math.abs(m[pivot][col]) < 1e-12) return null;
+      [m[col], m[pivot]] = [m[pivot], m[col]];
+      for (let r = col + 1; r < n; r++) {
+        const f = m[r][col] / m[col][col];
+        for (let c = col; c <= n; c++) m[r][c] -= f * m[col][c];
+      }
+    }
+    const x = new Array(n).fill(0);
+    for (let r = n - 1; r >= 0; r--) {
+      let s = 0;
+      for (let c = r + 1; c < n; c++) s += m[r][c] * x[c];
+      x[r] = (m[r][n] - s) / m[r][r];
+    }
+    return x;
+  }
+  const r3 = (x) => Math.round(x * 1000) / 1000;
+
+  // ---------------------------------------------------------------- indicators
+  function supportResistance(values, k = 2) {
+    const window = values.slice(-Math.min(values.length, 40));
+    const sup = [], res = [];
+    for (let i = k; i < window.length - k; i++) {
+      const slice = window.slice(i - k, i + k + 1);
+      if (window[i] === Math.min(...slice) && !sup.includes(window[i])) sup.push(window[i]);
+      if (window[i] === Math.max(...slice) && !res.includes(window[i])) res.push(window[i]);
+    }
+    return { supports: sup, resistances: res };
+  }
+
+  function indicators(values) {
+    if (values.length < 5) return { error: 'Need at least 5 data points for indicators.' };
+    const rets = returns(values), last = values[values.length - 1];
+    const smaV = sma(values, Math.min(20, values.length)).pop();
+    const ema12 = ema(values, 12), ema26 = ema(values, 26);
+    const macdLine = ema12.map((f, i) => f - ema26[i]);
+    const signalLine = ema(macdLine, 9);
+    const macdHist = macdLine[macdLine.length - 1] - signalLine[signalLine.length - 1];
+
+    let rsi = null;
+    if (values.length > 14) {
+      const gains = [], losses = [];
+      for (let i = 1; i < values.length; i++) {
+        const ch = values[i] - values[i - 1];
+        gains.push(Math.max(ch, 0)); losses.push(Math.max(-ch, 0));
+      }
+      let ag = mean(gains.slice(0, 14)), al = mean(losses.slice(0, 14));
+      for (let i = 14; i < gains.length; i++) { ag = (ag * 13 + gains[i]) / 14; al = (al * 13 + losses[i]) / 14; }
+      rsi = al === 0 ? 100 : 100 - 100 / (1 + ag / al);
+    }
+    const win = Math.min(20, values.length), recent = values.slice(-win);
+    const mid = mean(recent), sd = stdev(recent);
+    const { supports, resistances } = supportResistance(values);
+    return {
+      last, sma: smaV, macdHistogram: macdHist, rsi,
+      bollinger: { upper: mid + 2 * sd, mid, lower: mid - 2 * sd },
+      support: supports.filter((s) => s < last).length ? Math.max(...supports.filter((s) => s < last)) : null,
+      resistance: resistances.filter((x) => x > last).length ? Math.min(...resistances.filter((x) => x > last)) : null,
+      volatilityPerPeriod: stdev(rets),
+    };
+  }
+
+  // ---------------------------------------------------------------- direction
+  function predictDirection(values, symbol = null, periodsAhead = 1) {
+    if (values.length < 6) return { error: 'Need at least 6 data points to judge direction.' };
+    const rets = returns(values), vol = stdev(rets), last = values[values.length - 1];
+    const nBack = Math.min(5, values.length - 1);
+    const lookback = values[values.length - 1 - nBack];
+    const momentumRaw = lookback ? (last - lookback) / Math.abs(lookback) : 0;
+    const sMomentum = Math.tanh(momentumRaw / (vol * Math.sqrt(nBack) + 1e-9));
+    const emaF = ema(values, 5), emaS = ema(values, 15);
+    const sEma = Math.tanh(((emaF[emaF.length - 1] - emaS[emaS.length - 1]) / (vol * last + 1e-9)) * 2);
+    const win = values.slice(-Math.min(values.length, 20)).map(Number);
+    const { slope, r2 } = ols(win.map((_, i) => i), win);
+    const sTrend = Math.tanh(slope / (vol * last + 1e-9) / 2) * Math.max(r2, 0);
+    const ind = indicators(values);
+    let sRsi = 0;
+    if (ind.rsi != null) {
+      if (ind.rsi >= 70) sRsi = -Math.min((ind.rsi - 70) / 20, 1);
+      else if (ind.rsi <= 30) sRsi = Math.min((30 - ind.rsi) / 20, 1);
+    }
+    const smaVal = ind.sma != null ? ind.sma : last;
+    const sdWin = stdev(values.slice(-Math.min(values.length, 20))) + 1e-9;
+    const z = (last - smaVal) / sdWin;
+    const sMeanrev = -Math.tanh(z / 2);
+    const sMacd = Math.tanh((ind.macdHistogram / (vol * last + 1e-9)) * 2);
+
+    const signals = [
+      { name: 'momentum', value: sMomentum, weight: 0.25 },
+      { name: 'ema_crossover', value: sEma, weight: 0.2 },
+      { name: 'trend_slope', value: sTrend, weight: 0.2 },
+      { name: 'rsi_extreme', value: sRsi, weight: 0.1 },
+      { name: 'mean_reversion', value: sMeanrev, weight: 0.15 },
+      { name: 'macd_histogram', value: sMacd, weight: 0.1 },
+    ];
+    let net = clamp(signals.reduce((a, s) => a + s.value * s.weight, 0), -1, 1);
+    const weightedAbs = signals.reduce((a, s) => a + Math.abs(s.value) * s.weight, 0) + 1e-9;
+    const agreement = Math.abs(net) / weightedAbs;
+
+    const pUpDir = logistic(3.2 * net);
+    const sideways = clamp(0.35 * (1 - Math.abs(net)), 0.05, 0.35);
+    const pUp = (1 - sideways) * pUpDir, pDown = (1 - sideways) * (1 - pUpDir);
+    const dataFactor = Math.min(values.length / 30, 1);
+    const confidence = clamp(0.45 * Math.abs(net) + 0.45 * agreement + 0.1 * dataFactor, 0.05, 0.9);
+    const expectedMove = net * vol * last * Math.sqrt(periodsAhead);
+    const verdict = pUp > Math.max(pDown, sideways) ? 'UP'
+      : pDown > Math.max(pUp, sideways) ? 'DOWN' : 'SIDEWAYS';
+
+    return {
+      kind: 'direction', symbol: symbol || 'series', lastValue: last,
+      probabilities: { up: r3(pUp), down: r3(pDown), sideways: r3(sideways) },
+      verdict, expectedMovePct: last ? r3((expectedMove / last) * 100) : 0,
+      confidence: r3(confidence),
+      signals: signals.map((s) => ({
+        name: s.name, value: r3(s.value), weight: s.weight,
+        reading: s.value > 0.15 ? 'bullish' : s.value < -0.15 ? 'bearish' : 'neutral',
+      })),
+      netScore: r3(net), signalAgreement: r3(agreement),
+      support: ind.support, resistance: ind.resistance,
+      volatilityPerPeriod: Math.round(vol * 100000) / 100000,
+      dataPoints: values.length, disclaimer: DISCLAIMER,
+    };
+  }
+
+  function scenarios(values, symbol = null) {
+    if (values.length < 6) return { error: 'Need at least 6 data points for scenarios.' };
+    const d = predictDirection(values, symbol);
+    if (d.error) return d;
+    const last = values[values.length - 1], vol = stdev(returns(values));
+    const drift = d.netScore * vol;
+    const bull = last * (1 + Math.max(drift * 1.6, vol * 0.8));
+    const base = last * (1 + drift);
+    const bear = last * (1 + Math.min(drift * 1.6, -vol * 0.8));
+    const bp = r3(d.probabilities.up * 0.75), ep = r3(d.probabilities.down * 0.75);
+    return {
+      kind: 'scenarios', symbol: symbol || 'series', lastValue: last, confidence: d.confidence,
+      disclaimer: DISCLAIMER,
+      scenarios: [
+        { name: 'bull', target: Math.round(bull * 10000) / 10000, changePct: Math.round((bull / last - 1) * 10000) / 100, probability: bp },
+        { name: 'base', target: Math.round(base * 10000) / 10000, changePct: Math.round((base / last - 1) * 10000) / 100, probability: r3(Math.max(1 - bp - ep, 0)) },
+        { name: 'bear', target: Math.round(bear * 10000) / 10000, changePct: Math.round((bear / last - 1) * 10000) / 100, probability: ep },
+      ],
+    };
+  }
+
+  // ---------------------------------------------------------------- forecast
+  function forecastSeries(values, horizon = 1) {
+    if (values.length < 3) return { error: 'Need at least 3 data points to forecast.' };
+    horizon = Math.max(1, Math.min(Math.round(horizon), 10));
+    const ys = values.map(Number);
+
+    const linearNext = (series) => {
+      const window = series.slice(-Math.min(series.length, 12));
+      const { slope, intercept } = ols(window.map((_, i) => i), window);
+      return slope * (window.length - 1 + 1) + intercept;
+    };
+    const holtNext = (series, steps = 1, alpha = 0.5, beta = 0.25) => {
+      let level = series[0], trend = series[1] - series[0];
+      for (let i = 1; i < series.length; i++) {
+        const prev = level;
+        level = alpha * series[i] + (1 - alpha) * (level + trend);
+        trend = beta * (level - prev) + (1 - beta) * trend;
+      }
+      return level + steps * trend;
+    };
+    const smaNext = (series) => {
+      const window = series.slice(-Math.min(series.length, 3));
+      const prev = series.length > 3 ? series[series.length - 4] : window[0];
+      return series[series.length - 1] + (mean(window) - prev);
+    };
+    const engines = { linear_trend: linearNext, holt_smoothing: (s) => holtNext(s, 1), sma_continuation: smaNext };
+
+    const backLen = Math.min(ys.length - 3, 8);
+    const errs = {};
+    Object.keys(engines).forEach((n) => (errs[n] = []));
+    if (backLen >= 1) {
+      for (let cut = ys.length - backLen; cut < ys.length; cut++) {
+        Object.keys(engines).forEach((name) => {
+          try { errs[name].push(Math.abs(engines[name](ys.slice(0, cut)) - ys[cut])); }
+          catch (e) { errs[name].push(Math.abs(ys[cut - 1] - ys[cut])); }
+        });
+      }
+    }
+    let weights = {};
+    Object.keys(engines).forEach((n) => (weights[n] = 1 / (mean(errs[n].length ? errs[n] : [1]) + 1e-9)));
+    const tw = Object.values(weights).reduce((a, b) => a + b, 0);
+    Object.keys(weights).forEach((n) => (weights[n] /= tw));
+
+    const path = [], extended = ys.slice();
+    for (let s = 0; s < horizon; s++) {
+      let v = 0;
+      Object.keys(engines).forEach((n) => (v += weights[n] * engines[n](extended)));
+      path.push(v); extended.push(v);
+    }
+    let residualSd;
+    if (backLen >= 1) {
+      const combined = [];
+      for (let cut = ys.length - backLen; cut < ys.length; cut++) {
+        let p = 0;
+        Object.keys(engines).forEach((n) => (p += weights[n] * engines[n](ys.slice(0, cut))));
+        combined.push(Math.abs(p - ys[cut]));
+      }
+      residualSd = stdev(combined) || mean(combined) || 0;
+    } else residualSd = stdev(ys) * 0.25;
+
+    const stepScale = Math.sqrt(horizon);
+    const xs = ys.map((_, i) => i);
+    const { slope, r2 } = ols(xs, ys);
+    const trendWord = slope > 0 ? 'rising' : slope < 0 ? 'falling' : 'flat';
+    const point = path[path.length - 1];
+    const result = {
+      kind: 'forecast', historyPoints: ys.length, lastValue: ys[ys.length - 1], horizon,
+      nextValue: Math.round(point * 10000) / 10000,
+      path: path.map((v) => Math.round(v * 10000) / 10000),
+      interval80: [
+        Math.round((point - 1.2816 * residualSd * stepScale) * 10000) / 10000,
+        Math.round((point + 1.2816 * residualSd * stepScale) * 10000) / 10000,
+      ],
+      interval95: [
+        Math.round((point - 1.96 * residualSd * stepScale) * 10000) / 10000,
+        Math.round((point + 1.96 * residualSd * stepScale) * 10000) / 10000,
+      ],
+      trend: trendWord, trendR2: r3(r2),
+      engineWeights: Object.fromEntries(Object.entries(weights).map(([k, v]) => [k, r3(v)])),
+      confidence: r3(clamp(0.35 + 0.5 * Math.max(r2, 0) - 0.1 * (residualSd / (Math.abs(ys[ys.length - 1]) + 1e-9)), 0.1, 0.9)),
+    };
+    if (trendWord !== 'flat' && slope !== 0) result.disclaimer = DISCLAIMER;
+    return result;
+  }
+
+  // ---------------------------------------------------------------- sequences
+  function predictSequence(values) {
+    if (values.length < 3) return { error: 'Need at least 3 terms to detect a pattern.' };
+    const seq = values.map(Number), n = seq.length;
+    const done = (pattern, next, detail, confidence) => ({
+      kind: 'sequence', pattern, nextValue: Math.round(next * 1e6) / 1e6,
+      detail, confidence, sequence: seq,
+    });
+
+    if (seq.every((v) => v === seq[0])) return done('constant', seq[0], 'Every term is identical.', 0.99);
+    const diffs = [];
+    for (let i = 0; i < n - 1; i++) diffs.push(seq[i + 1] - seq[i]);
+    const eqTol = (arr) => arr.every((d) => Math.abs(d - arr[0]) <= 1e-9 * Math.max(1, Math.abs(arr[0])));
+    if (eqTol(diffs)) return done('arithmetic', seq[n - 1] + diffs[0], `Common difference ${diffs[0]}.`, 0.99);
+    if (seq.every((v) => Math.abs(v) > 1e-12)) {
+      const ratios = [];
+      for (let i = 0; i < n - 1; i++) ratios.push(seq[i + 1] / seq[i]);
+      if (eqTol(ratios)) return done('geometric', seq[n - 1] * ratios[0], `Common ratio ${ratios[0]}.`, 0.99);
+    }
+    // polynomial orders 2..3 via difference table
+    let rows = [seq.slice(), diffs.slice()];
+    for (let order = 2; order <= 3; order++) {
+      const prev = rows[rows.length - 1];
+      if (prev.length < 2) break;
+      const next = [];
+      for (let i = 0; i < prev.length - 1; i++) next.push(prev[i + 1] - prev[i]);
+      rows.push(next);
+      if (next.length >= 2 && eqTol(next)) {
+        let add = next[next.length - 1];
+        for (let r = rows.length - 2; r >= 0; r--) { add = rows[r][rows[r].length - 1] + add; rows[r].push(add); }
+        return done(`polynomial_order_${order}`, rows[0][rows[0].length - 1],
+          `Constant order-${order} differences (degree-${order} polynomial).`, 0.95);
+      }
+    }
+    // repeating cycle (before recurrence — simpler explanation wins)
+    for (let k = 1; k <= Math.floor(n / 2); k++) {
+      const cycle = seq.slice(0, k);
+      if (seq.every((v, i) => v === cycle[i % k]))
+        return done('cyclic', cycle[n % k], `Repeating cycle of length ${k}.`, 0.98);
+    }
+    // linear recurrence order 2..3
+    for (let order = 2; order <= 3; order++) {
+      if (n >= 2 * order + 2) {
+        const a = [], b = [];
+        for (let i = order; i <= 2 * order; i++) {
+          const row = [];
+          for (let j = 1; j <= order; j++) row.push(seq[i - j]);
+          row.push(1); a.push(row); b.push(seq[i]);
+        }
+        const coeffs = solveLinearSystem(a, b);
+        if (coeffs) {
+          const tol = 1e-6 * Math.max(1, ...seq.map(Math.abs));
+          let ok = true;
+          for (let i = order; i < n; i++) {
+            let pred = 0;
+            for (let j = 0; j < order; j++) pred += coeffs[j] * seq[i - 1 - j];
+            pred += coeffs[order];
+            if (Math.abs(pred - seq[i]) > tol) { ok = false; break; }
+          }
+          if (ok) {
+            let nxt = 0;
+            for (let j = 0; j < order; j++) nxt += coeffs[j] * seq[n - 1 - j];
+            nxt += coeffs[order];
+            const isFib = order === 2 && Math.abs(coeffs[0] - 1) < 1e-6 &&
+              Math.abs(coeffs[1] - 1) < 1e-6 && Math.abs(coeffs[2]) < 1e-6;
+            const terms = [];
+            for (let j = 0; j < order; j++) terms.push(`${coeffs[j].toFixed(4)}·v[n-${j + 1}]`);
+            terms.push(`${coeffs[order].toFixed(4)}`);
+            return done(isFib ? 'fibonacci_like' : `linear_recurrence_order_${order}`, nxt,
+              `v[n] = ${terms.join(' + ')}`, 0.97);
+          }
+        }
+      }
+    }
+    const fb = forecastSeries(seq);
+    if (fb.error) return fb;
+    return Object.assign(fb, {
+      pattern: 'none',
+      detail: 'No exact rule detected; values come from a statistical forecast.',
+      confidence: Math.min(fb.confidence || 0.4, 0.55),
+    });
+  }
+
+  // ---------------------------------------------------------------- events
+  function eventProbability(opts) {
+    const { baseRate, successes, trials, evidence } = opts || {};
+    const steps = [];
+    if (successes != null && trials != null) {
+      if (trials <= 0 || successes < 0 || successes > trials)
+        return { error: 'Need 0 <= successes <= trials and trials >= 1.' };
+      const m = (successes + 1) / (trials + 2);
+      const sd = Math.sqrt((m * (1 - m)) / (trials + 3));
+      return {
+        kind: 'event_probability', mode: 'frequency',
+        probability: Math.round(m * 10000) / 10000,
+        interval95: [Math.round(Math.max(0, m - 1.96 * sd) * 10000) / 10000,
+                     Math.round(Math.min(1, m + 1.96 * sd) * 10000) / 10000],
+        reasoning: [`Observed ${successes} successes in ${trials} trials (Laplace-smoothed Beta posterior).`],
+        confidence: r3(clamp(0.3 + trials / 50, 0.3, 0.9)),
+      };
+    }
+    let p = baseRate == null ? 0.5 : baseRate;
+    if (baseRate == null) steps.push('No base rate supplied; assuming an uninformative 50%.');
+    else {
+      if (!(p > 0 && p < 1)) return { error: 'Base rate must be strictly between 0 and 1.' };
+      steps.push(`Starting from base rate ${(p * 100).toFixed(1)}%.`);
+    }
+    if (evidence && evidence.length) {
+      let odds = p / (1 - p);
+      evidence.forEach((ev) => {
+        const dir = String(ev.direction || 'for').toLowerCase();
+        const strength = clamp(Number(ev.strength == null ? 0.5 : ev.strength), 0, 1);
+        const factor = Math.exp(strength * Math.log(4));
+        if (['against', 'contra', 'negative', 'no'].includes(dir)) { odds /= factor; steps.push(`Evidence AGAINST (strength ${strength.toFixed(2)}): odds ÷ ${factor.toFixed(2)}.`); }
+        else { odds *= factor; steps.push(`Evidence FOR (strength ${strength.toFixed(2)}): odds × ${factor.toFixed(2)}.`); }
+      });
+      p = odds / (1 + odds);
+    }
+    p = clamp(p, 0.01, 0.99);
+    return {
+      kind: 'event_probability', mode: 'base_rate_evidence',
+      probability: Math.round(p * 10000) / 10000,
+      probabilityPct: Math.round(p * 1000) / 10,
+      reasoning: steps, confidence: evidence && evidence.length ? 0.6 : 0.5,
+    };
+  }
+
+  // ---------------------------------------------------------------- risk
+  function assessRisk(values, symbol = null) {
+    if (values.length < 5) return { error: 'Need at least 5 data points for risk metrics.' };
+    const rets = returns(values), vol = stdev(rets);
+    const annualized = vol * Math.sqrt(252);
+    let peak = values[0], maxDd = 0;
+    values.forEach((v) => { peak = Math.max(peak, v); if (peak > 0) maxDd = Math.min(maxDd, (v - peak) / peak); });
+    const var95 = percentile(rets.slice().sort((a, b) => a - b), 0.05);
+    const recentVol = rets.length >= 5 ? stdev(rets.slice(-5)) : vol;
+    const regime = vol > 0 && recentVol > vol * 1.25 ? 'expanding'
+      : vol > 0 && recentVol < vol * 0.75 ? 'contracting' : 'stable';
+    const { r2 } = ols(values.map((_, i) => i), values.map(Number));
+    const score = clamp(
+      Math.min(vol / 0.03, 1) * 4 + Math.min(Math.abs(maxDd) / 0.2, 1) * 3 +
+      (1 - Math.max(r2, 0)) * 2 + (regime === 'expanding' ? 0.5 : 0), 0, 10);
+    const label = score < 3 ? 'low' : score < 5.5 ? 'medium' : score < 8 ? 'high' : 'extreme';
+    const out = {
+      kind: 'risk', symbol: symbol || 'series',
+      volatilityPerPeriod: Math.round(vol * 100000) / 100000,
+      annualizedVolatilityPct: Math.round(annualized * 10000) / 100,
+      maxDrawdownPct: Math.round(maxDd * 10000) / 100,
+      historicalVar95Pct: Math.round(var95 * 10000) / 100,
+      volatilityRegime: regime, trendStabilityR2: r3(r2),
+      riskScore: Math.round(score * 100) / 100, riskLabel: label,
+      dataPoints: values.length, disclaimer: DISCLAIMER,
+    };
+    if (values.length < 20)
+      out.warnings = [`Only ${values.length} data points; estimates are coarse. 20+ is recommended.`];
+    return out;
+  }
+
+  function analyzeMarket(values, symbol = null) {
+    const direction = predictDirection(values, symbol);
+    if (direction.error) return direction;
+    const ind = indicators(values);
+    return {
+      kind: 'market_brief', symbol: symbol || 'series', direction,
+      scenarios: scenarios(values, symbol).scenarios,
+      risk: assessRisk(values, symbol),
+      indicators: { rsi: ind.rsi, support: direction.support, resistance: direction.resistance },
+      confidence: direction.confidence, disclaimer: DISCLAIMER,
+    };
+  }
+
+  // ---------------------------------------------------------------- parsing
+  function extractSeries(text) {
+    const m = String(text || '').match(/-?\d+(\.\d+)?/g);
+    const nums = m ? m.map(Number) : [];
+    return nums.length >= 3 ? nums : [];
+  }
+  const CRYPTO = { btc: 'BTC', bitcoin: 'BTC', eth: 'ETH', ethereum: 'ETH', sol: 'SOL', doge: 'DOGE', xrp: 'XRP' };
+  function extractSymbol(text) {
+    const low = String(text || '').toLowerCase();
+    for (const [alias, sym] of Object.entries(CRYPTO)) if (new RegExp(`\\b${alias}\\b`).test(low)) return sym;
+    const stops = new Set(['HELP', 'QUIT', 'EXIT', 'RESET', 'SHOW', 'LOAD', 'JSON', 'DEMO', 'THE', 'AND', 'FOR', 'NEXT', 'WHAT', 'WILL', 'IT', 'GO', 'IS', 'MY', 'ME', 'UP', 'OR', 'IN', 'OF', 'TO', 'ON', 'BE', 'DO', 'AT']);
+    const caps = String(text || '').match(/\b[A-Z]{2,5}\b/g) || [];
+    const t = caps.find((c) => !stops.has(c));
+    return t || null;
+  }
+
+  return {
+    DISCLAIMER, indicators, predictDirection, scenarios, forecastSeries,
+    predictSequence, eventProbability, assessRisk, analyzeMarket,
+    extractSeries, extractSymbol,
+  };
+});
+
+</script>
+<script>
+'use strict';
+const E = window.JarvisEngine;
+const $ = (id) => document.getElementById(id);
+const seriesEl = $('series'), symbolEl = $('symbol'), horizonEl = $('horizon');
+
+/* ---------------- state ---------------- */
+function getState() {
+  const nums = (seriesEl.value.match(/-?\d+(\.\d+)?/g) || []).map(Number);
+  return { series: nums, symbol: symbolEl.value.trim().toUpperCase() || null, horizon: +horizonEl.value };
+}
+function persist() {
+  try { localStorage.setItem('jarvis', JSON.stringify({ s: seriesEl.value, y: symbolEl.value, h: horizonEl.value })); } catch (e) {}
+}
+function restore() {
+  try {
+    const d = JSON.parse(localStorage.getItem('jarvis') || 'null');
+    if (d) { seriesEl.value = d.s || ''; symbolEl.value = d.y || ''; horizonEl.value = d.h || '1'; }
+  } catch (e) {}
+}
+
+/* ---------------- chart ---------------- */
+function drawChart(series, forecast) {
+  const cv = $('chart'), ctx = cv.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const W = cv.clientWidth, H = 190;
+  cv.width = W * dpr; cv.height = H * dpr; ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, W, H);
+  if (!series || series.length < 2) {
+    ctx.fillStyle = '#8b96c9'; ctx.font = '13px ui-monospace, monospace'; ctx.textAlign = 'center';
+    ctx.fillText('no data — paste numbers above', W / 2, H / 2);
+    return;
+  }
+  const view = series.slice(-60);
+  const extra = forecast ? forecast.path.length : 0;
+  const vals = view.concat(forecast ? forecast.path : []);
+  const lo = Math.min(...vals), hi = Math.max(...vals);
+  const pad = (hi - lo) * 0.12 || 1;
+  const y = (v) => H - 22 - ((v - (lo - pad)) / ((hi + pad) - (lo - pad))) * (H - 40);
+  const x = (i) => 14 + (i / (view.length - 1 + extra)) * (W - 28);
+
+  // grid
+  ctx.strokeStyle = '#1d2a55'; ctx.lineWidth = 1; ctx.font = '10px ui-monospace, monospace';
+  for (let g = 0; g <= 3; g++) {
+    const gy = 18 + g * ((H - 40) / 3);
+    ctx.beginPath(); ctx.moveTo(10, gy); ctx.lineTo(W - 10, gy); ctx.globalAlpha = .35; ctx.stroke(); ctx.globalAlpha = 1;
+    const val = (hi + pad) - g * (((hi + pad) - (lo - pad)) / 3);
+    ctx.fillStyle = '#5a6699'; ctx.textAlign = 'left';
+    ctx.fillText(fmt(val), 12, gy - 4);
+  }
+  // CI band around forecast path
+  if (forecast) {
+    const p = forecast.path[forecast.path.length - 1];
+    const [lo80] = forecast.interval80; const hi80 = forecast.interval80[1];
+    const x0 = x(view.length - 1), x1 = x(view.length - 1 + extra);
+    ctx.fillStyle = 'rgba(76,195,255,.14)';
+    ctx.fillRect(Math.min(x0, x1), y(hi80), Math.abs(x1 - x0) || 8, Math.abs(y(lo80) - y(hi80)));
+  }
+  // series line
+  ctx.strokeStyle = '#4cc3ff'; ctx.lineWidth = 2; ctx.beginPath();
+  view.forEach((v, i) => (i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v))));
+  ctx.stroke();
+  // forecast dotted
+  if (forecast) {
+    ctx.strokeStyle = '#9fe6ff'; ctx.setLineDash([4, 4]); ctx.lineWidth = 2; ctx.beginPath();
+    ctx.moveTo(x(view.length - 1), y(view[view.length - 1]));
+    forecast.path.forEach((v, i) => ctx.lineTo(x(view.length - 1 + 1 + i), y(v)));
+    ctx.stroke(); ctx.setLineDash([]);
+    const lastP = forecast.path[forecast.path.length - 1];
+    ctx.fillStyle = '#9fe6ff'; ctx.beginPath();
+    ctx.arc(x(view.length - 1 + extra), y(lastP), 4.5, 0, 7); ctx.fill();
+    ctx.fillStyle = '#cfeeff'; ctx.font = '11px ui-monospace, monospace'; ctx.textAlign = 'right';
+    ctx.fillText(fmt(lastP), W - 12, y(lastP) - 9);
+  }
+  // last value dot
+  ctx.fillStyle = '#4cc3ff'; ctx.beginPath();
+  ctx.arc(x(view.length - 1), y(view[view.length - 1]), 3.5, 0, 7); ctx.fill();
+}
+const fmt = (v) => (Math.abs(v) >= 1000 ? v.toFixed(0) : Math.abs(v) >= 10 ? v.toFixed(1) : v.toPrecision(4));
+
+/* ---------------- rendering ---------------- */
+function bar(cls, label, pct) {
+  return `<div class="bar-row ${cls}"><span>${label}</span>
+    <div class="bar-track"><div class="bar-fill" style="width:${Math.round(pct * 100)}%"></div></div>
+    <span style="text-align:right;font-family:var(--mono)">${(pct * 100).toFixed(0)}%</span></div>`;
+}
+function pctBar(cls, label, p) { return bar(cls, label, p); }
+function signalsHtml(signals) {
+  return `<div class="signals">` + signals.map((s) => {
+    const w = Math.min(Math.abs(s.value), 1) * 50;
+    const cls = s.value >= 0 ? 'bull' : 'bear';
+    const rc = s.reading === 'bullish' ? 'bull-t' : s.reading === 'bearish' ? 'bear-t' : 'neutral-t';
+    return `<div class="sig"><span class="name">${s.name}</span>
+      <div class="track"><div class="fill ${cls}" style="${s.value >= 0 ? 'left:50%' : 'right:50%'};width:${w}%"></div>
+      <div style="position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:#2a3a6e"></div></div>
+      <span class="reading ${rc}">${s.reading}</span></div>`;
+  }).join('') + `</div>`;
+}
+function disclaimerHtml(extra) {
+  return `<div class="disclaimer">◆ ${E.DISCLAIMER}${extra || ''}</div>`;
+}
+function render(result, series) {
+  const box = $('answer');
+  $('answer-card').classList.remove('hidden');
+  if (result.error) { box.innerHTML = `<div class="warn">${result.error}</div>`; return; }
+  switch (result.kind) {
+    case 'direction': {
+      const p = result.probabilities;
+      const vc = result.verdict === 'UP' ? 'v-up' : result.verdict === 'DOWN' ? 'v-down' : 'v-flat';
+      const lv = ['up', 'down', 'sideways'];
+      box.innerHTML = `
+        <div class="verdict"><span class="big ${vc}">${result.verdict}</span>
+          <div class="stat"><b>${result.symbol}</b> at <b>${fmt(result.lastValue)}</b> · expected move
+          <b>${result.expectedMovePct > 0 ? '+' : ''}${result.expectedMovePct}%</b> · confidence <b>${(result.confidence * 100).toFixed(0)}%</b>
+          <br>${result.dataPoints} points · vol/period ${(result.volatilityPerPeriod * 100).toFixed(2)}%</div></div>
+        <div class="bars">${bar('b-up', 'Up', p.up)}${bar('b-down', 'Down', p.down)}${bar('b-flat', 'Sideways', p.sideways)}</div>
+        ${signalsHtml(result.signals)}
+        ${(result.support != null || result.resistance != null) ? `<div class="meta">Levels — support <b>${result.support != null ? fmt(result.support) : '—'}</b> · resistance <b>${result.resistance != null ? fmt(result.resistance) : '—'}</b></div>` : ''}
+        ${disclaimerHtml()}`;
+      drawChart(series);
+      break;
+    }
+    case 'forecast': {
+      box.innerHTML = `
+        <div class="verdict"><span class="big v-up" style="background:linear-gradient(180deg,#8bd8ff,#2196f3);color:#04101f">NEXT ${fmt(result.nextValue)}</span>
+          <div class="stat">trend <b>${result.trend}</b> (R² ${result.trendR2}) · horizon <b>${result.horizon}</b> · confidence <b>${(result.confidence * 100).toFixed(0)}%</b><br>
+          80% <b>[${fmt(result.interval80[0])}, ${fmt(result.interval80[1])}]</b> · 95% <b>[${fmt(result.interval95[0])}, ${fmt(result.interval95[1])}]</b></div></div>
+        <div class="bars">${Object.entries(result.engineWeights).map(([k, v]) => bar('b-flat', k.replace('_', ' '), v)).join('')}</div>
+        ${result.disclaimer ? disclaimerHtml() : ''}`;
+      drawChart(series, result);
+      break;
+    }
+    case 'sequence': {
+      box.innerHTML = `
+        <div class="verdict"><span class="big v-up" style="background:linear-gradient(180deg,#8bd8ff,#2196f3);color:#04101f">${+result.nextValue}</span>
+          <div class="stat">pattern <b>${result.pattern.replace(/_/g, ' ')}</b> · confidence <b>${(result.confidence * 100).toFixed(0)}%</b></div></div>
+        <div class="pattern">${result.detail || ''}</div>
+        <div class="meta">series: ${result.sequence.map((v) => +v).join(', ')}, <b style="color:var(--cyan)">?</b></div>`;
+      drawChart(series);
+      break;
+    }
+    case 'scenarios': {
+      const icon = { bull: '▲', base: '▬', bear: '▼' };
+      box.innerHTML = `<div class="grid3">` + result.scenarios.map((s) => `
+        <div class="tile ${s.name}"><div class="k">${icon[s.name]} ${s.name}</div>
+        <div class="v">${fmt(s.target)}</div>
+        <div class="s">${s.changePct > 0 ? '+' : ''}${s.changePct}% · p=${(s.probability * 100).toFixed(0)}%</div></div>`).join('') +
+        `</div><div class="meta">last <b>${fmt(result.lastValue)}</b> · confidence <b>${(result.confidence * 100).toFixed(0)}%</b></div>${disclaimerHtml()}`;
+      drawChart(series);
+      break;
+    }
+    case 'risk': {
+      const color = { low: 'var(--up)', medium: 'var(--flat)', high: '#ff8a5c', extreme: 'var(--down)' }[result.riskLabel];
+      box.innerHTML = `
+        <div class="verdict"><span class="big" style="background:#0c142e;border:1px solid var(--line);color:${color}">${result.riskLabel.toUpperCase()}</span>
+          <div class="stat">risk score <b>${result.riskScore}/10</b> · regime <b>${result.volatilityRegime}</b> · trend R² <b>${result.trendStabilityR2}</b></div></div>
+        <div class="bars">${bar('b-flat', 'risk', result.riskScore / 10)}</div>
+        <div class="grid3">
+          <div class="tile"><div class="k">vol / period</div><div class="v">${(result.volatilityPerPeriod * 100).toFixed(2)}%</div></div>
+          <div class="tile"><div class="k">annualised vol</div><div class="v">${result.annualizedVolatilityPct}%</div><div class="s">daily bars</div></div>
+          <div class="tile"><div class="k">max drawdown</div><div class="v">${result.maxDrawdownPct}%</div></div>
+          <div class="tile"><div class="k">VaR 95%</div><div class="v">${result.historicalVar95Pct}%</div><div class="s">per period</div></div>
+        </div>
+        ${result.warnings ? `<div class="warn">⚠ ${result.warnings.join(' ')}</div>` : ''}
+        ${disclaimerHtml()}`;
+      drawChart(series);
+      break;
+    }
+    case 'event_probability': {
+      box.innerHTML = `
+        <div class="verdict"><span class="big v-up" style="background:linear-gradient(180deg,#8bd8ff,#2196f3);color:#04101f">${(result.probability * 100).toFixed(1)}%</span>
+          <div class="stat">${result.mode === 'frequency' ? 'Laplace-smoothed frequency' : 'base rate + evidence'}
+          · confidence <b>${(result.confidence * 100).toFixed(0)}%</b></div></div>
+        ${result.interval95 ? `<div class="bars">${bar('b-flat', '95% range', result.probability)}
+          <div class="meta">interval <b>[${(result.interval95[0] * 100).toFixed(1)}%, ${(result.interval95[1] * 100).toFixed(1)}%]</b></div></div>` : ''}
+        <ul class="steps">${(result.reasoning || []).map((s) => `<li>${s}</li>`).join('')}</ul>`;
+      drawChart(null);
+      break;
+    }
+    case 'market_brief': {
+      const d = result.direction, p = d.probabilities;
+      const vc = d.verdict === 'UP' ? 'v-up' : d.verdict === 'DOWN' ? 'v-down' : 'v-flat';
+      box.innerHTML = `
+        <div class="verdict"><span class="big ${vc}">${d.verdict}</span>
+          <div class="stat"><b>${result.symbol}</b> at <b>${fmt(d.lastValue)}</b> · confidence <b>${(d.confidence * 100).toFixed(0)}%</b>
+          ${result.indicators.rsi != null ? `· RSI <b>${result.indicators.rsi.toFixed(1)}</b>` : ''}</div></div>
+        <div class="bars">${bar('b-up', 'Up', p.up)}${bar('b-down', 'Down', p.down)}${bar('b-flat', 'Sideways', p.sideways)}</div>
+        ${signalsHtml(d.signals)}
+        <div class="grid3">` + result.scenarios.map((s) => `
+          <div class="tile ${s.name}"><div class="k">${s.name}</div><div class="v">${fmt(s.target)}</div>
+          <div class="s">${s.changePct > 0 ? '+' : ''}${s.changePct}% · p=${(s.probability * 100).toFixed(0)}%</div></div>`).join('') + `
+        </div>
+        <div class="meta">risk <b>${result.risk.riskLabel}</b> (${result.risk.riskScore}/10) · VaR95 <b>${result.risk.historicalVar95Pct}%</b> · max DD <b>${result.risk.maxDrawdownPct}%</b></div>
+        ${disclaimerHtml()}`;
+      drawChart(series);
+      break;
+    }
+    default: box.innerHTML = `<pre style="font-size:12px;white-space:pre-wrap">${JSON.stringify(result, null, 1)}</pre>`;
+  }
+  $('answer-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+/* ---------------- routing (mirrors the console) ---------------- */
+function route(question) {
+  const low = question.toLowerCase();
+  const st = getState();
+
+  // event odds
+  if (/\b(odds|probab|chance|likel)/.test(low)) {
+    const m = low.match(/(\d+)\s*(?:\/|out of|of|in)\s*(\d+)/);
+    if (m && +m[2] > 0 && +m[1] <= +m[2]) return E.eventProbability({ successes: +m[1], trials: +m[2] });
+    const b = low.match(/base(?:\s*rate)?\s*([0-9]*\.?[0-9]+)\s*%?/);
+    if (b) {
+      let pct = +b[1]; const base = pct > 1 ? pct / 100 : pct;
+      const evidence = [];
+      const strengths = { strong: 0.9, solid: 0.7, moderate: 0.5, weak: 0.3, slight: 0.2 };
+      low.split(/,| and (?=strong|solid|moderate|weak|slight)/).forEach((chunk) => {
+        const direction = /against|oppos|negative/.test(chunk) ? 'against' : 'for';
+        let strength = 0.5;
+        for (const [w, v] of Object.entries(strengths)) if (chunk.includes(w)) { strength = v; break; }
+        if (/evidence|argument|signal|sign of/.test(chunk) || Object.keys(strengths).some((w) => chunk.includes(w)))
+          evidence.push({ direction, strength });
+      });
+      return E.eventProbability({ baseRate: base, evidence });
+    }
+    return { kind: 'event_probability', mode: 'hint', probability: null,
+      error: 'For odds, give Jarvis numbers: “odds 7 of 10” (observed frequency) or “odds base 30% strong evidence for”.' };
+  }
+
+  // sequence
+  const wantsSeq = /next (number|term|value|digit)|sequence|pattern/.test(low);
+  if (wantsSeq && st.series.length >= 3) return E.predictSequence(st.series);
+
+  // which market analysis?
+  const wantsDir = /direction|up or down|will it|go up|go down|rise|fall|drop|rally|trend|market|trade|tomorrow|next bar|next candle|what will /.test(low) || low === 'direction';
+  const wantsScen = /scenario|bull|bear/.test(low);
+  const wantsRisk = /risk|volatil|drawdown|var\b/.test(low);
+  const wantsBrief = /brief|everything|full/.test(low);
+
+  if (st.series.length >= 3) {
+    if (wantsBrief) return E.analyzeMarket(st.series, st.symbol);
+    if (wantsScen) return E.scenarios(st.series, st.symbol);
+    if (wantsRisk) return E.assessRisk(st.series, st.symbol);
+    if (wantsDir) return E.predictDirection(st.series, st.symbol);
+    return E.forecastSeries(st.series, st.horizon);
+  }
+  return { error: 'Jarvis needs numbers first, sir — paste a series in the DATA panel (3+ values).' };
+}
+
+/* ---------------- chat glue ---------------- */
+function logMsg(cls, text) {
+  const div = document.createElement('div');
+  div.className = `msg ${cls}`; div.textContent = text;
+  $('log').appendChild(div);
+  while ($('log').children.length > 12) $('log').removeChild($('log').firstChild);
+}
+function ask(question) {
+  question = question.trim();
+  if (!question) return;
+  logMsg('user', question);
+  let result;
+  try { result = route(question); }
+  catch (e) { result = { error: 'engine error: ' + e.message }; }
+  if (result.error) { logMsg('jarvis', result.error); render(result, []); return; }
+  render(result, getState().series);
+  const summary = summarize(result);
+  if (summary) logMsg('jarvis', summary);
+}
+function summarize(r) {
+  switch (r.kind) {
+    case 'direction': return `${r.verdict} — up ${(r.probabilities.up * 100).toFixed(0)}% / down ${(r.probabilities.down * 100).toFixed(0)}% (confidence ${(r.confidence * 100).toFixed(0)}%)`;
+    case 'forecast': return `next value ${fmt(r.nextValue)}, 80% range [${fmt(r.interval80[0])} … ${fmt(r.interval80[1])}]`;
+    case 'sequence': return `pattern: ${r.pattern.replace(/_/g, ' ')} → next term ${+r.nextValue}`;
+    case 'scenarios': return r.scenarios.map((s) => `${s.name} ${fmt(s.target)} (${(s.probability * 100).toFixed(0)}%)`).join(' · ');
+    case 'risk': return `risk ${r.riskLabel.toUpperCase()} ${r.riskScore}/10 · VaR95 ${r.historicalVar95Pct}% · DD ${r.maxDrawdownPct}%`;
+    case 'event_probability': return `probability ${(r.probability * 100).toFixed(1)}%`;
+    case 'market_brief': return `brief: ${r.direction.verdict} · risk ${r.risk.riskLabel}`;
+    default: return null;
+  }
+}
+
+/* ---------------- events ---------------- */
+const DEMOS = {
+  market: [100.2, 101.1, 99.8, 100.9, 101.7, 102.4, 101.9, 102.8, 103.5, 103.1, 104.2, 105.0],
+  crypto: [44000, 44500, 44100, 45200, 45800, 45400, 46100, 46700],
+  seq: [2, 4, 8, 16, 32],
+};
+$('demo').addEventListener('click', () => {
+  const keys = Object.keys(DEMOS);
+  demoIdx = (demoIdx + 1) % keys.length;
+  const k = keys[demoIdx];
+  seriesEl.value = DEMOS[k].join(' ');
+  symbolEl.value = k === 'crypto' ? 'BTC' : k === 'market' ? 'DEMO' : '';
+  refresh();
+  logMsg('jarvis', `loaded ${k} demo (${DEMOS[k].length} points) — now ask me something`);
+});
+let demoIdx = -1;
+$('clear').addEventListener('click', () => { seriesEl.value = ''; symbolEl.value = ''; refresh(); persist(); });
+$('file').addEventListener('change', (ev) => {
+  const f = ev.target.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    const nums = (String(rd.result).match(/-?\d+(\.\d+)?/g) || []).map(Number);
+    if (nums.length < 3) { logMsg('jarvis', 'that file has fewer than 3 numbers, sir'); return; }
+    seriesEl.value = nums.join(' ');
+    if (!symbolEl.value) symbolEl.value = f.name.replace(/\.[^.]+$/, '').toUpperCase().slice(0, 8);
+    refresh(); persist();
+    logMsg('jarvis', `loaded ${nums.length} points from ${f.name} — ask away`);
+  };
+  rd.readAsText(f);
+});
+[seriesEl, symbolEl].forEach((el) => el.addEventListener('input', () => { refresh(); persist(); }));
+horizonEl.addEventListener('change', persist);
+function refresh() {
+  const st = getState();
+  $('parsed').innerHTML = st.series.length >= 3
+    ? `<b>${st.series.length}</b> points parsed${st.symbol ? ` · <b>${st.symbol}</b>` : ''}`
+    : (st.series.length ? `<b>${st.series.length}</b> points — need at least 3` : '');
+  drawChart(st.series.length >= 2 ? st.series : null);
+}
+$('actions').addEventListener('click', (ev) => {
+  const chip = ev.target.closest('.chip'); if (!chip) return;
+  document.querySelectorAll('.chip').forEach((c) => c.classList.remove('active'));
+  chip.classList.add('active');
+  ask(chip.dataset.q);
+});
+$('send').addEventListener('click', () => { ask($('ask').value); $('ask').value = ''; });
+$('ask').addEventListener('keydown', (e) => { if (e.key === 'Enter') { ask($('ask').value); $('ask').value = ''; } });
+
+/* standalone file — no service worker needed */
+restore(); refresh();
+</script>
+</body>
+</html>
